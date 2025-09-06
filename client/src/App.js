@@ -54,6 +54,8 @@ function App() {
         const result = await response.json();
         setUser(result.user);
         setIsAuthenticated(true);
+        // Автоматично встановлюємо ім'я користувача
+        setName(result.user.fullName || result.user.username);
       } else {
         localStorage.removeItem("authToken");
         localStorage.removeItem("userName");
@@ -71,6 +73,8 @@ function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     setIsAuthenticated(true);
+    // Автоматично встановлюємо ім'я користувача
+    setName(userData.fullName || userData.username);
   };
 
   // Функція для виходу з системи
@@ -175,7 +179,10 @@ function App() {
   // Функція для збереження відповіді на сервері
   const saveAnswerToServer = useCallback(
     async (questionId, answer) => {
-      if (!selectedQuiz || !name) return;
+      if (!selectedQuiz || !user) return;
+
+      const userName = user.fullName || user.username;
+      if (!userName) return;
 
       try {
         const token = getAuthToken();
@@ -186,7 +193,7 @@ function App() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            studentName: name,
+            studentName: userName,
             questionId: questionId,
             answer: answer,
           }),
@@ -201,12 +208,15 @@ function App() {
         console.error("Error saving answer:", error);
       }
     },
-    [selectedQuiz, name]
+    [selectedQuiz, user]
   );
 
   const loadQuestions = async (newAttempt = false) => {
-    if (!name.trim()) {
-      alert("Оберіть ваше ім'я зі списку");
+    // Використовуємо ім'я авторизованого користувача
+    const userName = user?.fullName || user?.username || name;
+
+    if (!userName?.trim()) {
+      alert("Помилка: не вдалося отримати ім'я користувача");
       return;
     }
 
@@ -220,9 +230,11 @@ function App() {
       const token = getAuthToken();
       const url = newAttempt
         ? `/questions/${selectedQuiz}?newAttempt=true&studentName=${encodeURIComponent(
-            name
+            userName
           )}`
-        : `/questions/${selectedQuiz}?studentName=${encodeURIComponent(name)}`;
+        : `/questions/${selectedQuiz}?studentName=${encodeURIComponent(
+            userName
+          )}`;
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -309,6 +321,7 @@ function App() {
       setLoading(true);
       try {
         const token = getAuthToken();
+        const userName = user?.fullName || user?.username || name;
         const response = await fetch(`/submit/${selectedQuiz}`, {
           method: "POST",
           headers: {
@@ -316,7 +329,7 @@ function App() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            name,
+            name: userName,
             answers,
             startTime: startTime,
           }),
@@ -347,7 +360,7 @@ function App() {
         setLoading(false);
       }
     },
-    [selectedQuiz, name, quizzes, startTime]
+    [selectedQuiz, user, quizzes, startTime, name]
   );
 
   // Загрузка списка доступных тестов
@@ -485,6 +498,12 @@ function App() {
           {selectedQuiz && !isCompleted && !questions.length && (
             <div className="welcome-section">
               <h2>{quizTitle}</h2>
+              <div className="user-info">
+                <p>
+                  Користувач:{" "}
+                  <strong>{user?.fullName || user?.username}</strong>
+                </p>
+              </div>
               {attemptsLeft && (
                 <div className="attempts-info">
                   <p>
@@ -500,18 +519,6 @@ function App() {
                 </div>
               )}
               <div className="input-group">
-                <select
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="name-input"
-                >
-                  <option value="">Оберіть ваше ім'я</option>
-                  {students.map((student, index) => (
-                    <option key={index} value={student}>
-                      {student}
-                    </option>
-                  ))}
-                </select>
                 <button
                   onClick={() => loadQuestions()}
                   className="start-button"
