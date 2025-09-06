@@ -1,0 +1,37 @@
+{
+  "settings": {
+    "title": "Приклад тесту з вибором студентів",
+    "maxAttempts": 2,
+    "randomQuestionsCount": 3,
+    "timeLimit": 5,
+    "students": [
+      "Студент 1",
+      "Студент 2",
+      "Студент 3",
+      "Студент 4",
+      "Студент 5"
+    ]
+  },
+  "questions": [
+    {
+      "id": 1,
+      "question": "Яка столиця України?",
+      "type": "multiple_choice",
+      "options": ["Львів", "Київ", "Харків", "Одеса"],
+      "answer": "Київ"
+    },
+    {
+      "id": 2,
+      "question": "Скільки буде 2 + 2?",
+      "answer": "4",
+      "type": "text"
+    },
+    {
+      "id": 3,
+      "question": "Який колір неба?",
+      "type": "multiple_choice",
+      "options": ["Червоний", "Синій", "Зелений", "Жовтий"],
+      "answer": "Синій"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "testing-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "bun run index.js",
+    "dev": "concurrently \"bun run server\" \"bun run client\"",
+    "server": "bun --watch index.js",
+    "client": "cd client && bun start",
+    "build": "cd client && bun run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "concurrently": "^8.2.2",
+    "date-fns": "^4.1.0",
+    "express": "^5.1.0"
+  }
+}
