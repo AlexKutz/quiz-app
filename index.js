@@ -1,28 +1,12 @@
-import { file } from "bun";
-import { join, dirname } from "path";
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-  unlinkSync,
-} from "fs";
+import DatabaseManager from "./database.js";
+import { join } from "path";
 
 const PORT = 3000;
 const __dirname = import.meta.dir;
 
-// Ensure results and sessions directories exist
-const resultsDir = join(__dirname, "results");
-const sessionsDir = join(__dirname, "sessions");
-
-if (!existsSync(resultsDir)) {
-  mkdirSync(resultsDir, { recursive: true });
-}
-
-if (!existsSync(sessionsDir)) {
-  mkdirSync(sessionsDir, { recursive: true });
-}
+// Инициализация базы данных
+const db = new DatabaseManager();
+await db.initialize();
 
 function getClientIp(request) {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -45,7 +29,8 @@ function getClientIp(request) {
 }
 
 function checkTimeLimit(quiz, startTime) {
-  if (!quiz.settings.timeLimit) {
+  const settings = JSON.parse(quiz.settings);
+  if (!settings.timeLimit) {
     return { expired: false, remaining: null, total: null };
   }
 
@@ -54,23 +39,24 @@ function checkTimeLimit(quiz, startTime) {
     return { expired: false, remaining: null, total: null };
   }
 
-  const timeLimitMs = quiz.settings.timeLimit * 60 * 1000; // конвертируем минуты в миллисекунды
+  const timeLimitMs = settings.timeLimit * 60 * 1000; // конвертируем минуты в миллисекунды
   const elapsed = Date.now() - startTime;
   const remaining = Math.max(0, timeLimitMs - elapsed);
 
   return {
     expired: elapsed >= timeLimitMs,
     remaining: Math.floor(remaining / 1000), // оставшееся время в секундах
-    total: quiz.settings.timeLimit * 60, // общее время в секундах
+    total: settings.timeLimit * 60, // общее время в секундах
   };
 }
 
 // Функция для вычисления результатов на основе сохраненных ответов
 function calculateResults(quiz, savedAnswers) {
+  const questions = JSON.parse(quiz.questions);
   let totalScore = 0;
   let correctCount = 0;
 
-  for (const question of quiz.questions) {
+  for (const question of questions) {
     if (question.type === "multiple_choice") {
       const userAnswer = savedAnswers[question.id];
       const correctAnswer = question.answer;
@@ -101,13 +87,13 @@ function calculateResults(quiz, savedAnswers) {
     }
   }
 
-  const averageScore = totalScore / quiz.questions.length;
+  const averageScore = totalScore / questions.length;
 
   return {
     totalScore,
     correctCount,
     averageScore,
-    results: quiz.questions.map((q) => {
+    results: questions.map((q) => {
       const givenAnswer = savedAnswers[q.id];
       const isCorrect =
         q.type === "multiple_choice"
@@ -128,78 +114,43 @@ function calculateResults(quiz, savedAnswers) {
 }
 
 // Функция для автоматического сохранения теста при истечении времени
-function autoSaveTest(sessionPath, quiz, studentName, ip) {
-  if (!existsSync(sessionPath)) {
-    return;
+function autoSaveTest(sessionId, quiz, studentName, ip) {
+  const session = db.getSession(studentName, quiz.id, ip);
+  if (!session) {
+    return false;
   }
 
   try {
-    const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"));
-    const startTime =
-      studentName && sessionData.students && sessionData.students[studentName]
-        ? sessionData.students[studentName].startTime
-        : sessionData.startTime;
-
-    if (!startTime) {
-      return;
-    }
-
-    const timeCheck = checkTimeLimit(quiz, startTime);
+    const timeCheck = checkTimeLimit(quiz, session.start_time);
     if (timeCheck.expired) {
-      console.log(`Time expired for session: ${sessionPath}`);
+      console.log(`Time expired for session: ${sessionId}`);
 
       // Получаем сохраненные ответы
-      const savedAnswers =
-        studentName && sessionData.students && sessionData.students[studentName]
-          ? sessionData.students[studentName].answers || {}
-          : sessionData.answers || {};
+      const savedAnswers = JSON.parse(session.answers || "{}");
 
       // Вычисляем результаты на основе сохраненных ответов
       const results = calculateResults(quiz, savedAnswers);
 
-      // Создаем результат с сохраненными ответами
-      const autoSaveResult = {
-        name: studentName || "Unknown",
-        ip: ip,
-        results: results.results,
-        attempts: 1,
-        completedAt: new Date().toISOString(),
-        quizTitle: quiz.settings.title,
-        quizId: quiz.id || "unknown",
-        averageScore: results.averageScore,
-        totalScore: results.totalScore,
-        correctCount: results.correctCount,
-        autoSaved: true,
-        timeExpired: true,
-      };
-
       // Сохраняем результат
-      const resultsPath = join("results", `${quiz.id || "unknown"}.json`);
-      let allResults = [];
-      if (existsSync(resultsPath)) {
-        allResults = JSON.parse(readFileSync(resultsPath, "utf-8"));
-      }
-
-      const existingIndex = allResults.findIndex(
-        (result) =>
-          result.name === autoSaveResult.name && result.ip === autoSaveResult.ip
+      db.saveResult(
+        session.student_id,
+        quiz.id,
+        results.results,
+        1,
+        results.averageScore,
+        results.totalScore,
+        results.correctCount,
+        true,
+        true
       );
 
-      if (existingIndex >= 0) {
-        allResults[existingIndex] = autoSaveResult;
-      } else {
-        allResults.push(autoSaveResult);
-      }
-
-      writeFileSync(resultsPath, JSON.stringify(allResults, null, 2), "utf-8");
-
       // Удаляем сессию
-      unlinkSync(sessionPath);
-      console.log(`Session deleted and test auto-saved: ${sessionPath}`);
+      db.deleteSession(sessionId);
+      console.log(`Session deleted and test auto-saved: ${sessionId}`);
       return true; // Возвращаем true если сессия была завершена
     }
   } catch (error) {
-    console.error(`Error auto-saving test for session ${sessionPath}:`, error);
+    console.error(`Error auto-saving test for session ${sessionId}:`, error);
   }
 
   return false; // Возвращаем false если сессия не была завершена
@@ -208,78 +159,43 @@ function autoSaveTest(sessionPath, quiz, studentName, ip) {
 // Функция для пассивной проверки всех сессий
 function checkAllSessions() {
   try {
-    if (!existsSync(sessionsDir)) {
-      return;
-    }
-
-    const sessionFiles = readdirSync(sessionsDir);
-    const sessionJsonFiles = sessionFiles.filter((file) =>
-      file.endsWith("_session.json")
-    );
-
-    console.log(`Checking ${sessionJsonFiles.length} active sessions...`);
+    const sessions = db.getAllSessions();
+    console.log(`Checking ${sessions.length} active sessions...`);
 
     let completedSessions = 0;
 
-    for (const sessionFile of sessionJsonFiles) {
-      const sessionPath = join(sessionsDir, sessionFile);
-
+    for (const session of sessions) {
       try {
-        const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"));
-
-        // Извлекаем информацию о квизе и студенте из имени файла
-        const fileName = sessionFile.replace("_session.json", "");
-        const parts = fileName.split("_");
-
-        if (parts.length < 2) {
-          console.log(`Invalid session file format: ${sessionFile}`);
-          continue;
-        }
-
-        const ip = parts[0];
-        const quizId = parts[1];
-        const studentName = parts.length > 2 ? parts.slice(2).join("_") : null;
-
-        // Загружаем квиз
-        const quiz = loadQuiz(quizId);
+        const quiz = db.getQuiz(session.quiz_id);
         if (!quiz) {
-          console.log(`Quiz not found for session: ${sessionFile}`);
+          console.log(`Quiz not found for session: ${session.id}`);
           continue;
         }
 
         // Проверяем время
-        const startTime =
-          studentName &&
-          sessionData.students &&
-          sessionData.students[studentName]
-            ? sessionData.students[studentName].startTime
-            : sessionData.startTime;
+        const timeCheck = checkTimeLimit(quiz, session.start_time);
 
-        if (startTime) {
-          const timeCheck = checkTimeLimit(quiz, startTime);
-
-          if (timeCheck.expired) {
-            // Время истекло, автоматически сохраняем тест
-            const wasCompleted = autoSaveTest(
-              sessionPath,
-              quiz,
-              studentName,
-              ip
-            );
-            if (wasCompleted) {
-              completedSessions++;
-            }
+        if (timeCheck.expired) {
+          // Время истекло, автоматически сохраняем тест
+          const wasCompleted = autoSaveTest(
+            session.id,
+            quiz,
+            session.name,
+            session.ip
+          );
+          if (wasCompleted) {
+            completedSessions++;
           }
         }
       } catch (error) {
-        console.error(`Error processing session file ${sessionFile}:`, error);
-        // Если файл поврежден, удаляем его
+        console.error(`Error processing session ${session.id}:`, error);
+        // Если сессия повреждена, удаляем её
         try {
-          unlinkSync(sessionPath);
-          console.log(`Removed corrupted session file: ${sessionFile}`);
+          db.deleteSession(session.id);
+          console.log(`Removed corrupted session: ${session.id}`);
         } catch (unlinkError) {
           console.error(
-            `Error removing corrupted session file ${sessionFile}:`,
+            `Error removing corrupted session ${session.id}:`,
             unlinkError
           );
         }
@@ -292,41 +208,6 @@ function checkAllSessions() {
   } catch (error) {
     console.error("Error checking sessions:", error);
   }
-}
-
-// Функция для получения списка доступных тестов
-function getAvailableQuizzes() {
-  const quizzesDir = join(__dirname, "quizzes");
-  if (!existsSync(quizzesDir)) {
-    return [];
-  }
-
-  const files = readdirSync(quizzesDir);
-  return files
-    .filter((file) => file.endsWith(".json"))
-    .map((file) => {
-      const filePath = join(quizzesDir, file);
-      const content = JSON.parse(readFileSync(filePath, "utf-8"));
-      return {
-        id: file.replace(".json", ""),
-        title: content.settings.title,
-        maxAttempts: content.settings.maxAttempts,
-        totalQuestions: content.questions.length,
-        randomQuestionsCount: content.settings.randomQuestionsCount,
-        students: content.settings.students || [],
-      };
-    });
-}
-
-// Функция для загрузки теста
-function loadQuiz(quizId) {
-  const quizPath = join(__dirname, "quizzes", `${quizId}.json`);
-  if (!existsSync(quizPath)) {
-    return null;
-  }
-  const quiz = JSON.parse(readFileSync(quizPath, "utf-8"));
-  quiz.id = quizId; // Добавляем ID квиза для использования в autoSaveTest
-  return quiz;
 }
 
 // Функция для случайного выбора вопросов
@@ -372,7 +253,7 @@ async function serveStatic(request) {
     url.pathname === "/" ? "index.html" : url.pathname
   );
 
-  if (existsSync(filePath)) {
+  if (Bun.file(filePath).exists) {
     const file = Bun.file(filePath);
     return new Response(file, {
       headers: {
@@ -430,21 +311,21 @@ async function handleRequest(request) {
   try {
     // Получение списка доступных тестов
     if (method === "GET" && path === "/quizzes") {
-      const quizzes = getAvailableQuizzes();
+      const quizzes = db.getAvailableQuizzes();
       return sendJSON(quizzes);
     }
 
     // Получение информации о тесте
     if (method === "GET" && path.startsWith("/quiz-info/")) {
       const quizId = path.split("/")[2];
-      const quiz = loadQuiz(quizId);
+      const quiz = db.getQuiz(quizId);
 
       if (!quiz) {
         return sendJSON({ error: "Тест не найден" }, 404);
       }
 
       return sendJSON({
-        quizTitle: quiz.settings.title,
+        quizTitle: quiz.title,
         students: quiz.settings.students || [],
         timeLimit: quiz.settings.timeLimit,
         maxAttempts: quiz.settings.maxAttempts,
@@ -457,10 +338,9 @@ async function handleRequest(request) {
     if (method === "GET" && path.startsWith("/questions/")) {
       const quizId = path.split("/")[2];
       const ip = getClientIp(request);
-      const resultsPath = join("results", `${quizId}.json`);
       const { newAttempt, studentName } = Object.fromEntries(url.searchParams);
 
-      const quiz = loadQuiz(quizId);
+      const quiz = db.getQuiz(quizId);
       if (!quiz) {
         return sendJSON({ error: "Тест не найден" }, 404);
       }
@@ -476,71 +356,42 @@ async function handleRequest(request) {
         );
       }
 
-      // Створюємо унікальний шлях сесії для кожного учня в папці sessions
-      const sessionPath = join(
-        "sessions",
-        `${ip}_${quizId}_${studentName}_session.json`
-      );
-
       // Проверяем истечение времени для существующей сессии
-      if (existsSync(sessionPath) && !newAttempt) {
-        const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"));
+      if (!newAttempt) {
+        const session = db.getSession(studentName, quizId, ip);
 
-        // Знаходимо час початку
-        let studentStartTime = null;
-        if (
-          studentName &&
-          sessionData.students &&
-          sessionData.students[studentName]
-        ) {
-          studentStartTime = sessionData.students[studentName].startTime;
-        } else if (sessionData.startTime) {
-          // Fallback для старого формату
-          studentStartTime = sessionData.startTime;
-        }
-
-        if (studentStartTime) {
-          const timeCheck = checkTimeLimit(quiz, studentStartTime);
+        if (session) {
+          const timeCheck = checkTimeLimit(quiz, session.start_time);
           console.log("Time check for existing session:", {
             studentName,
-            startTime: studentStartTime,
+            startTime: session.start_time,
             timeLimit: quiz.settings.timeLimit,
             timeCheck,
           });
 
           if (timeCheck.expired) {
             // Время истекло, автоматически сохраняем тест и удаляем сессию
-            autoSaveTest(sessionPath, quiz, studentName, ip);
+            autoSaveTest(session.id, quiz, studentName, ip);
             return sendJSON({
               timeExpired: true,
               message:
                 "Час на проходження тесту вичерпано. Тест автоматично збережено.",
-              quizTitle: quiz.settings.title,
+              quizTitle: quiz.title,
             });
           }
 
           // Возвращаем активную сессию с сохраненными ответами
-          const savedAnswers =
-            studentName &&
-            sessionData.students &&
-            sessionData.students[studentName]
-              ? sessionData.students[studentName].answers || {}
-              : sessionData.answers || {};
+          const savedAnswers = JSON.parse(session.answers || "{}");
+          const questions = JSON.parse(session.questions);
 
           return sendJSON({
             completed: false,
-            questions:
-              sessionData.students && sessionData.students[studentName]
-                ? sessionData.students[studentName].questions
-                : sessionData.questions,
-            totalQuestions:
-              sessionData.students && sessionData.students[studentName]
-                ? sessionData.students[studentName].questions.length
-                : sessionData.questions.length,
-            quizTitle: quiz.settings.title,
+            questions: questions,
+            totalQuestions: questions.length,
+            quizTitle: quiz.title,
             maxAttempts: quiz.settings.maxAttempts,
             timeLimit: quiz.settings.timeLimit,
-            startTime: studentStartTime,
+            startTime: session.start_time,
             timeRemaining: timeCheck.remaining,
             students: quiz.settings.students || [],
             savedAnswers: savedAnswers, // Добавляем сохраненные ответы
@@ -548,29 +399,52 @@ async function handleRequest(request) {
         }
       }
 
-      // Проверяем, есть ли результаты для этого студента (только если передано имя)
-      if (existsSync(resultsPath) && !newAttempt && studentName) {
-        const allResults = JSON.parse(readFileSync(resultsPath, "utf-8"));
-        const studentResults = allResults.find(
-          (result) => result.name === studentName && result.ip === ip
-        );
+      // Проверяем, есть ли результаты для этого студента
+      if (!newAttempt && studentName) {
+        const result = db.getResult(studentName, quizId, ip);
 
-        if (studentResults) {
-          if (studentResults.attempts >= quiz.settings.maxAttempts) {
+        if (result) {
+          if (result.attempts >= quiz.settings.maxAttempts) {
             return sendJSON({
               completed: true,
-              results: studentResults,
+              results: {
+                name: result.name,
+                ip: result.ip,
+                results: JSON.parse(result.results),
+                attempts: result.attempts,
+                completedAt: result.completed_at,
+                quizTitle: result.quiz_title,
+                quizId: result.quiz_id,
+                averageScore: result.average_score,
+                totalScore: result.total_score,
+                correctCount: result.correct_count,
+                autoSaved: result.auto_saved,
+                timeExpired: result.time_expired,
+              },
               maxAttemptsReached: true,
-              quizTitle: quiz.settings.title,
+              quizTitle: quiz.title,
               students: quiz.settings.students || [],
             });
           }
 
           return sendJSON({
             completed: true,
-            results: studentResults,
-            attemptsLeft: quiz.settings.maxAttempts - studentResults.attempts,
-            quizTitle: quiz.settings.title,
+            results: {
+              name: result.name,
+              ip: result.ip,
+              results: JSON.parse(result.results),
+              attempts: result.attempts,
+              completedAt: result.completed_at,
+              quizTitle: result.quiz_title,
+              quizId: result.quiz_id,
+              averageScore: result.average_score,
+              totalScore: result.total_score,
+              correctCount: result.correct_count,
+              autoSaved: result.auto_saved,
+              timeExpired: result.time_expired,
+            },
+            attemptsLeft: quiz.settings.maxAttempts - result.attempts,
+            quizTitle: quiz.title,
             students: quiz.settings.students || [],
           });
         }
@@ -581,40 +455,27 @@ async function handleRequest(request) {
         quiz.settings.randomQuestionsCount
       );
 
-      // Завантажуємо існуючу сесію або створюємо нову
-      let sessionData = {};
-      if (existsSync(sessionPath)) {
-        sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"));
-      }
+      // Создаем новую сессию
+      const questionsData = randomQuestions.map((q) => {
+        const questionData = {
+          id: q.id,
+          question: q.question,
+          type: q.type || "text",
+        };
 
-      // Створюємо час початку
-      const startTime = Date.now();
+        if (q.type === "multiple_choice" && q.options) {
+          questionData.options = q.options;
+        }
 
-      // Створюємо нову сесію з іменем учня
-      sessionData = {
-        startTime: startTime,
-        answers: {}, // Инициализируем пустой объект для ответов
-        questions: randomQuestions.map((q) => {
-          const questionData = {
-            id: q.id,
-            question: q.question,
-            type: q.type || "text",
-          };
+        if (q.type === "matching") {
+          questionData.leftColumn = q.leftColumn;
+          questionData.rightColumn = q.rightColumn;
+        }
 
-          if (q.type === "multiple_choice" && q.options) {
-            questionData.options = q.options;
-          }
+        return questionData;
+      });
 
-          if (q.type === "matching") {
-            questionData.leftColumn = q.leftColumn;
-            questionData.rightColumn = q.rightColumn;
-          }
-
-          return questionData;
-        }),
-      };
-
-      writeFileSync(sessionPath, JSON.stringify(sessionData, null, 2), "utf-8");
+      const { student, startTime } = db.createSession(studentName, quizId, ip, questionsData);
 
       // Обчислюємо час, що залишився для нової сесії
       const timeCheck = checkTimeLimit(quiz, startTime);
@@ -627,9 +488,9 @@ async function handleRequest(request) {
 
       return sendJSON({
         completed: false,
-        questions: sessionData.questions,
+        questions: questionsData,
         totalQuestions: randomQuestions.length,
-        quizTitle: quiz.settings.title,
+        quizTitle: quiz.title,
         maxAttempts: quiz.settings.maxAttempts,
         timeLimit: quiz.settings.timeLimit
           ? quiz.settings.timeLimit * 60
@@ -652,39 +513,16 @@ async function handleRequest(request) {
         return sendJSON({ error: "Некорректные данные" }, 400);
       }
 
-      const sessionPath = studentName
-        ? join("sessions", `${ip}_${quizId}_${studentName}_session.json`)
-        : join("sessions", `${ip}_${quizId}_session.json`);
-
-      if (!existsSync(sessionPath)) {
+      const session = db.getSession(studentName, quizId, ip);
+      if (!session) {
         return sendJSON({ error: "Сессия не найдена" }, 404);
       }
 
       try {
-        const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"));
+        const answers = JSON.parse(session.answers || "{}");
+        answers[questionId] = answer;
 
-        // Сохраняем ответ
-        if (
-          studentName &&
-          sessionData.students &&
-          sessionData.students[studentName]
-        ) {
-          if (!sessionData.students[studentName].answers) {
-            sessionData.students[studentName].answers = {};
-          }
-          sessionData.students[studentName].answers[questionId] = answer;
-        } else {
-          if (!sessionData.answers) {
-            sessionData.answers = {};
-          }
-          sessionData.answers[questionId] = answer;
-        }
-
-        writeFileSync(
-          sessionPath,
-          JSON.stringify(sessionData, null, 2),
-          "utf-8"
-        );
+        db.updateSessionAnswers(session.id, answers);
 
         return sendJSON({ success: true, message: "Ответ сохранен" });
       } catch (error) {
@@ -703,26 +541,21 @@ async function handleRequest(request) {
         return sendJSON({ error: "Некорректные данные" }, 400);
       }
 
-      const quiz = loadQuiz(quizId);
+      const quiz = db.getQuiz(quizId);
       if (!quiz) {
         return sendJSON({ error: "Тест не найден" }, 404);
       }
 
       const ip = getClientIp(request);
-      const resultsPath = join("results", `${quizId}.json`);
-      const sessionPath = join(
-        "sessions",
-        `${ip}_${quizId}_${name}_session.json`
-      );
 
       // Проверяем время, если есть активная сессия
-      if (existsSync(sessionPath)) {
-        const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"));
-        const timeCheck = checkTimeLimit(quiz, sessionData.startTime);
+      const session = db.getSession(name, quizId, ip);
+      if (session) {
+        const timeCheck = checkTimeLimit(quiz, session.start_time);
 
         if (timeCheck.expired) {
           // Время истекло, автоматически сохраняем тест и удаляем сессию
-          autoSaveTest(sessionPath, quiz, name, ip);
+          autoSaveTest(session.id, quiz, name, ip);
           return sendJSON(
             {
               error:
@@ -734,42 +567,62 @@ async function handleRequest(request) {
         }
 
         // Удаляем сессию после успешной отправки
-        unlinkSync(sessionPath);
+        db.deleteSession(session.id);
+      }
+
+      // Находим студента
+      let student = db.queries.getStudent.get(name, quizId, ip);
+      if (!student) {
+        db.queries.insertStudent.run(name, quizId, ip);
+        student = db.queries.getStudent.get(name, quizId, ip);
       }
 
       // Вычисляем результаты
       const results = calculateResults(quiz, answers);
 
+      // Проверяем, есть ли уже результат
+      const existingResult = db.getResult(name, quizId, ip);
+
+      if (existingResult) {
+        // Обновляем существующий результат
+        db.updateResult(
+          student.id,
+          quizId,
+          results.results,
+          existingResult.attempts + 1,
+          results.averageScore,
+          results.totalScore,
+          results.correctCount,
+          false,
+          false
+        );
+      } else {
+        // Создаем новый результат
+        db.saveResult(
+          student.id,
+          quizId,
+          results.results,
+          1,
+          results.averageScore,
+          results.totalScore,
+          results.correctCount,
+          false,
+          false
+        );
+      }
+
       const newResult = {
         name,
         ip,
         results: results.results,
-        attempts: 1, // Always 1 for new attempts
+        attempts: existingResult ? existingResult.attempts + 1 : 1,
         completedAt: new Date().toISOString(),
-        quizTitle: quiz.settings.title,
+        quizTitle: quiz.title,
         quizId,
         averageScore: results.averageScore,
         totalScore: results.totalScore,
         correctCount: results.correctCount,
       };
-
-      // Читаем существующие результаты или создаем новый массив
-      let allResults = [];
-      if (existsSync(resultsPath)) {
-        allResults = JSON.parse(readFileSync(resultsPath, "utf-8"));
-      }
-
-      // Находим существующий результат этого студента (по имени И IP) или добавляем новый
-      const existingIndex = allResults.findIndex(
-        (result) => result.name === name && result.ip === ip
-      );
-      if (existingIndex >= 0) {
-        allResults[existingIndex] = newResult;
-      } else {
-        allResults.push(newResult);
-      }
-
-      writeFileSync(resultsPath, JSON.stringify(allResults, null, 2), "utf-8");
 
       return sendJSON({
         ...newResult,
@@ -783,43 +636,31 @@ async function handleRequest(request) {
       const { studentName } = Object.fromEntries(url.searchParams);
       const ip = getClientIp(request);
 
-      const quiz = loadQuiz(quizId);
+      const quiz = db.getQuiz(quizId);
       if (!quiz) {
         return sendJSON({ error: "Тест не найден" }, 404);
       }
 
-      const sessionPath = studentName
-        ? join("sessions", `${ip}_${quizId}_${studentName}_session.json`)
-        : join("sessions", `${ip}_${quizId}_session.json`);
+      const session = db.getSession(studentName, quizId, ip);
 
-      if (existsSync(sessionPath)) {
-        const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"));
-        const startTime =
-          studentName &&
-          sessionData.students &&
-          sessionData.students[studentName]
-            ? sessionData.students[studentName].startTime
-            : sessionData.startTime;
+      if (session) {
+        const timeCheck = checkTimeLimit(quiz, session.start_time);
 
-        if (startTime) {
-          const timeCheck = checkTimeLimit(quiz, startTime);
-
-          if (timeCheck.expired) {
-            // Время истекло, автоматически сохраняем тест
-            autoSaveTest(sessionPath, quiz, studentName, ip);
-            return sendJSON({
-              timeExpired: true,
-              message:
-                "Час на проходження тесту вичерпано. Тест автоматично збережено.",
-            });
-          }
-
+        if (timeCheck.expired) {
+          // Время истекло, автоматически сохраняем тест
+          autoSaveTest(session.id, quiz, studentName, ip);
           return sendJSON({
-            timeExpired: false,
-            timeRemaining: timeCheck.remaining,
-            timeLimit: quiz.settings.timeLimit * 60,
+            timeExpired: true,
+            message:
+              "Час на проходження тесту вичерпано. Тест автоматично збережено.",
           });
         }
+
+        return sendJSON({
+          timeExpired: false,
+          timeRemaining: timeCheck.remaining,
+          timeLimit: quiz.settings.timeLimit * 60,
+        });
       }
 
       return sendJSON({ timeExpired: false });
