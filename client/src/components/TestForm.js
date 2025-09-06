@@ -18,17 +18,28 @@ const TestForm = ({
 
   // Синхронізуємо локальний стан з збереженими відповідями
   useEffect(() => {
-    setAnswers(savedAnswers);
+    console.log('TestForm useEffect:', { savedAnswers, answers });
+    if (savedAnswers && Object.keys(savedAnswers).length > 0) {
+      setAnswers(savedAnswers);
+    }
   }, [savedAnswers]);
 
   const handleAnswerChange = (questionId, value) => {
+    console.log('handleAnswerChange called:', { questionId, value, currentAnswers: answers });
     const newAnswers = {
       ...answers,
       [questionId]: value,
     };
-    setAnswers(newAnswers);
+    console.log('newAnswers:', newAnswers);
+    setAnswers(prev => {
+      console.log('setAnswers called:', { prev, newAnswers });
+      return newAnswers;
+    });
     if (onAnswersChange) {
+      console.log('Calling onAnswersChange with:', newAnswers);
       onAnswersChange(newAnswers);
+    } else {
+      console.log('onAnswersChange is not defined');
     }
   };
 
@@ -119,6 +130,8 @@ const TestForm = ({
   };
 
   const renderQuestion = (question, index) => {
+    console.log('renderQuestion called:', { questionId: question.id, answers, savedAnswers });
+    
     if (question.type === "multiple_choice") {
       return (
         <div key={question.id} className="question-item">
@@ -137,9 +150,10 @@ const TestForm = ({
                     name={`question_${question.id}`}
                     value={option}
                     checked={answers[question.id] === option}
-                    onChange={(e) =>
-                      handleAnswerChange(question.id, e.target.value)
-                    }
+                    onChange={(e) => {
+                      console.log('Radio change:', { questionId: question.id, value: e.target.value, currentAnswer: answers[question.id] });
+                      handleAnswerChange(question.id, e.target.value);
+                    }}
                     className="option-input"
                   />
                   <MathJaxText className="option-text">{option}</MathJaxText>

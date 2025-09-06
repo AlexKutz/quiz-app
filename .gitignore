@@ -119,3 +119,6 @@ results/*.json
 # Test results
 test-results/
 coverage/
+
+# Database
+*.db

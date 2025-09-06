@@ -69,6 +69,32 @@ class DatabaseManager {
       )
     `);
 
+    // Таблица пользователей (для авторизации)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        email TEXT,
+        full_name TEXT,
+        role TEXT DEFAULT 'student',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_login DATETIME
+      )
+    `);
+
+    // Таблица сессий пользователей (JWT)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
     console.log("Database initialized successfully");
   }
 
@@ -142,6 +168,39 @@ class DatabaseManager {
         JOIN quizzes q ON r.quiz_id = q.id
         WHERE r.quiz_id = ?
         ORDER BY r.completed_at DESC
+      `),
+
+      // User authentication queries
+      insertUser: this.db.prepare(`
+        INSERT INTO users (username, password_hash, email, full_name, role)
+        VALUES (?, ?, ?, ?, ?)
+      `),
+      getUserByUsername: this.db.prepare(`
+        SELECT * FROM users WHERE username = ?
+      `),
+      getUserById: this.db.prepare(`
+        SELECT * FROM users WHERE id = ?
+      `),
+      updateLastLogin: this.db.prepare(`
+        UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?
+      `),
+
+      // Session management
+      insertUserSession: this.db.prepare(`
+        INSERT INTO user_sessions (user_id, token_hash, expires_at)
+        VALUES (?, ?, ?)
+      `),
+      getUserSession: this.db.prepare(`
+        SELECT us.*, u.username, u.role 
+        FROM user_sessions us
+        JOIN users u ON us.user_id = u.id
+        WHERE us.token_hash = ? AND us.expires_at > datetime('now')
+      `),
+      deleteUserSession: this.db.prepare(`
+        DELETE FROM user_sessions WHERE token_hash = ?
+      `),
+      deleteExpiredSessions: this.db.prepare(`
+        DELETE FROM user_sessions WHERE expires_at <= datetime('now')
       `),
     };
   }
@@ -374,6 +433,53 @@ class DatabaseManager {
 
   getResultsByQuiz(quizId) {
     return this.queries.getResultsByQuiz.all(quizId);
+  }
+
+  // Методы для работы с пользователями
+  createUser(username, passwordHash, email, fullName, role = "student") {
+    try {
+      return this.queries.insertUser.run(
+        username,
+        passwordHash,
+        email,
+        fullName,
+        role
+      );
+    } catch (error) {
+      if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+        throw new Error("Користувач з таким логіном вже існує");
+      }
+      throw error;
+    }
+  }
+
+  getUserByUsername(username) {
+    return this.queries.getUserByUsername.get(username);
+  }
+
+  getUserById(id) {
+    return this.queries.getUserById.get(id);
+  }
+
+  updateLastLogin(userId) {
+    this.queries.updateLastLogin.run(userId);
+  }
+
+  // Методы для работы с сессиями
+  createUserSession(userId, tokenHash, expiresAt) {
+    return this.queries.insertUserSession.run(userId, tokenHash, expiresAt);
+  }
+
+  getUserSession(tokenHash) {
+    return this.queries.getUserSession.get(tokenHash);
+  }
+
+  deleteUserSession(tokenHash) {
+    this.queries.deleteUserSession.run(tokenHash);
+  }
+
+  cleanExpiredSessions() {
+    this.queries.deleteExpiredSessions.run();
   }
 
   // Закрытие соединения с базой данных

@@ -1,12 +1,23 @@
 import DatabaseManager from "./database.js";
+import { AuthManager } from "./auth.js";
 import { join } from "path";
 
 const PORT = 3000;
 const __dirname = import.meta.dir;
 
-// Инициализация базы данных
+// Инициализация базы данных и авторизации
 const db = new DatabaseManager();
 await db.initialize();
+
+const auth = new AuthManager(db);
+
+// Очищаємо старі сесії при запуску
+auth.cleanupSessions();
+
+// Очищаємо старі сесії кожні 30 хвилин
+setInterval(() => {
+  auth.cleanupSessions();
+}, 30 * 60 * 1000);
 
 function getClientIp(request) {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -29,7 +40,8 @@ function getClientIp(request) {
 }
 
 function checkTimeLimit(quiz, startTime) {
-  const settings = JSON.parse(quiz.settings);
+  // quiz.settings уже распарсен в DatabaseManager.getQuiz()
+  const settings = quiz.settings;
   if (!settings.timeLimit) {
     return { expired: false, remaining: null, total: null };
   }
@@ -52,7 +64,8 @@ function checkTimeLimit(quiz, startTime) {
 
 // Функция для вычисления результатов на основе сохраненных ответов
 function calculateResults(quiz, savedAnswers) {
-  const questions = JSON.parse(quiz.questions);
+  // quiz.questions уже распарсен в DatabaseManager.getQuiz()
+  const questions = quiz.questions;
   let totalScore = 0;
   let correctCount = 0;
 
@@ -281,6 +294,17 @@ function getContentType(filePath) {
   return types[ext] || "text/plain";
 }
 
+// Middleware для автентифікації
+function authenticateUser(request) {
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+  return auth.authenticate(token);
+}
+
 // Основной обработчик запросов
 async function handleRequest(request) {
   const url = new URL(request.url);
@@ -309,10 +333,120 @@ async function handleRequest(request) {
 
   // API маршруты
   try {
-    // Получение списка доступных тестов
+    // Реєстрація
+    if (method === "POST" && path === "/auth/register") {
+      const body = await parseJSON(request);
+      console.log("Register request body:", body);
+
+      if (!body) {
+        return sendJSON({ error: "Некорректные данные" }, 400);
+      }
+
+      const { fullName, password } = body;
+
+      if (!fullName || !password) {
+        return sendJSON(
+          {
+            error: "Повне ім'я та пароль є обов'язковими",
+          },
+          400
+        );
+      }
+
+      try {
+        const result = await auth.register(fullName, password);
+        return sendJSON({
+          success: true,
+          message: "Користувач успішно зареєстрований",
+          userId: result.userId,
+        });
+      } catch (error) {
+        console.error("Register error:", error);
+        return sendJSON(
+          {
+            error: error.message,
+          },
+          400
+        );
+      }
+    }
+
+    // Авторизація
+    if (method === "POST" && path === "/auth/login") {
+      const body = await parseJSON(request);
+      console.log("Login request body:", body);
+
+      if (!body) {
+        return sendJSON({ error: "Некорректные данные" }, 400);
+      }
+
+      const { fullName, password } = body;
+
+      try {
+        const result = await auth.login(fullName, password);
+        return sendJSON(result);
+      } catch (error) {
+        console.error("Login error:", error);
+        return sendJSON(
+          {
+            error: error.message,
+          },
+          401
+        );
+      }
+    }
+
+    // Вихід з системи
+    if (method === "POST" && path === "/auth/logout") {
+      const authHeader = request.headers.get("Authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.substring(7);
+        auth.logout(token);
+      }
+
+      return sendJSON({
+        success: true,
+        message: "Успішний вихід з системи",
+      });
+    }
+
+    // Перевірка автентифікації
+    if (method === "GET" && path === "/auth/me") {
+      const user = authenticateUser(request);
+      if (!user) {
+        return sendJSON({ error: "Не авторизований" }, 401);
+      }
+
+      return sendJSON({ user });
+    }
+
+    // Захищені маршрути - потребують авторизації
+    const protectedRoutes = ["/questions/", "/submit/", "/save-answer/"];
+    const isProtectedRoute = protectedRoutes.some((route) =>
+      path.startsWith(route)
+    );
+
+    if (isProtectedRoute) {
+      const user = authenticateUser(request);
+      if (!user) {
+        return sendJSON({ error: "Необхідна авторизація" }, 401);
+      }
+
+      // Додаємо інформацію про користувача до запиту
+      request.user = user;
+    }
+
+    // Получение списка доступных тестов (тепер з автентифікацією)
     if (method === "GET" && path === "/quizzes") {
+      const user = authenticateUser(request);
       const quizzes = db.getAvailableQuizzes();
-      return sendJSON(quizzes);
+
+      // Якщо користувач авторизований, повертаємо всі тести
+      // Якщо ні - тільки публічні (можна додати поле в налаштуваннях тесту)
+      return sendJSON({
+        quizzes,
+        authenticated: !!user,
+      });
     }
 
     // Получение информации о тесте
@@ -475,7 +609,12 @@ async function handleRequest(request) {
         return questionData;
       });
 
-      const { student, startTime } = db.createSession(studentName, quizId, ip, questionsData);
+      const { student, startTime } = db.createSession(
+        studentName,
+        quizId,
+        ip,
+        questionsData
+      );
 
       // Обчислюємо час, що залишився для нової сесії
       const timeCheck = checkTimeLimit(quiz, startTime);

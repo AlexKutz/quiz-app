@@ -3,8 +3,15 @@ import "./App.css";
 import TestForm from "./components/TestForm";
 import Results from "./components/Results";
 import Header from "./components/Header";
+import Auth from "./components/Auth";
 
 function App() {
+  // Стани для авторизації
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Стани для тестування
   const [name, setName] = useState("");
   const [questions, setQuestions] = useState([]);
   const [results, setResults] = useState(null);
@@ -23,30 +30,117 @@ function App() {
   const [startTime, setStartTime] = useState(null);
   const [savedAnswers, setSavedAnswers] = useState({});
 
-  useEffect(() => {
-    const loadQuizzes = async () => {
-      try {
-        const response = await fetch("/quizzes");
-        const data = await response.json();
-        console.log("Quizzes data:", data);
-        setQuizzes(data);
+  // Функція для отримання токена з localStorage
+  const getAuthToken = () => {
+    return localStorage.getItem("authToken");
+  };
 
-        // Завантажуємо список учнів з першого доступного тесту
-        if (data.length > 0) {
-          await loadStudentsFromQuiz(data[0].id);
-        }
-      } catch (error) {
-        console.error("Ошибка загрузки тестов:", error);
+  // Функція для перевірки авторизації
+  const checkAuth = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setAuthLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/auth/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUser(result.user);
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("userName");
       }
-    };
-
-    loadQuizzes();
+    } catch (error) {
+      console.error("Auth check error:", error);
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userName");
+    } finally {
+      setAuthLoading(false);
+    }
   }, []);
+
+  // Функція для входу в систему
+  const handleLogin = (userData) => {
+    setUser(userData);
+    setIsAuthenticated(true);
+  };
+
+  // Функція для виходу з системи
+  const handleLogout = async () => {
+    try {
+      const token = getAuthToken();
+      if (token) {
+        await fetch("/auth/logout", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userName");
+      setUser(null);
+      setIsAuthenticated(false);
+      // Скидаємо всі стани тестування
+      resetToQuizSelection();
+    }
+  };
+
+  // Перевіряємо авторизацію при завантаженні
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Завантажуємо тести тільки після авторизації
+  useEffect(() => {
+    if (isAuthenticated) {
+      const loadQuizzes = async () => {
+        try {
+          const token = getAuthToken();
+          const response = await fetch("/quizzes", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const data = await response.json();
+          console.log("Quizzes data:", data);
+          setQuizzes(data.quizzes || data);
+
+          // Завантажуємо список учнів з першого доступного тесту
+          if (data.quizzes && data.quizzes.length > 0) {
+            await loadStudentsFromQuiz(data.quizzes[0].id);
+          } else if (data.length > 0) {
+            await loadStudentsFromQuiz(data[0].id);
+          }
+        } catch (error) {
+          console.error("Ошибка загрузки тестов:", error);
+        }
+      };
+
+      loadQuizzes();
+    }
+  }, [isAuthenticated]);
 
   // Функція для завантаження списку учнів з конкретного тесту
   const loadStudentsFromQuiz = async (quizId) => {
     try {
-      const response = await fetch(`/quiz-info/${quizId}`);
+      const token = getAuthToken();
+      const response = await fetch(`/quiz-info/${quizId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
       console.log("Quiz info data:", data);
       if (data.students) {
@@ -59,7 +153,12 @@ function App() {
 
   const loadQuizInfo = async (quizId) => {
     try {
-      const response = await fetch(`/quiz-info/${quizId}`);
+      const token = getAuthToken();
+      const response = await fetch(`/quiz-info/${quizId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
       console.log("Quiz info data:", data);
       if (data.students) {
@@ -79,10 +178,12 @@ function App() {
       if (!selectedQuiz || !name) return;
 
       try {
+        const token = getAuthToken();
         const response = await fetch(`/save-answer/${selectedQuiz}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             studentName: name,
@@ -116,12 +217,17 @@ function App() {
 
     setLoading(true);
     try {
+      const token = getAuthToken();
       const url = newAttempt
         ? `/questions/${selectedQuiz}?newAttempt=true&studentName=${encodeURIComponent(
             name
           )}`
         : `/questions/${selectedQuiz}?studentName=${encodeURIComponent(name)}`;
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
       console.log("Quiz data:", data);
 
@@ -202,10 +308,12 @@ function App() {
     async (answers) => {
       setLoading(true);
       try {
+        const token = getAuthToken();
         const response = await fetch(`/submit/${selectedQuiz}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             name,
@@ -308,9 +416,44 @@ function App() {
     setStartTime(null);
   };
 
+  // Показуємо завантаження авторизації
+  if (authLoading) {
+    return (
+      <div className="App">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Завантаження...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Показуємо форму авторизації, якщо користувач не авторизований
+  if (!isAuthenticated) {
+    return (
+      <div className="App">
+        <div className="auth-page">
+          <div className="auth-header">
+            <h1>Система тестування</h1>
+            <p>Увійдіть в систему для проходження тестів</p>
+          </div>
+          <Auth onLogin={handleLogin} />
+        </div>
+      </div>
+    );
+  }
+
+  // Основний інтерфейс для авторизованих користувачів
   return (
     <div className="App">
-      <Header />
+      <Header
+        user={user}
+        onLogout={handleLogout}
+        name={name}
+        quizTitle={quizTitle}
+        timeRemaining={timeRemaining}
+        timeExpired={timeExpired}
+      />
       <main className="main-content">
         <div className="container">
           {!selectedQuiz && (
