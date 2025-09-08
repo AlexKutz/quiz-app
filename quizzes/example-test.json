@@ -2,15 +2,8 @@
   "settings": {
     "title": "Приклад тесту з вибором студентів",
     "maxAttempts": 2,
-    "randomQuestionsCount": 3,
-    "timeLimit": 5,
-    "students": [
-      "Студент 1",
-      "Студент 2",
-      "Студент 3",
-      "Студент 4",
-      "Студент 5"
-    ]
+    "randomQuestionsCount": 6,
+    "timeLimit": 5
   },
   "questions": [
     {
@@ -32,6 +25,34 @@
       "type": "multiple_choice",
       "options": ["Червоний", "Синій", "Зелений", "Жовтий"],
       "answer": "Синій"
+    },
+    {
+      "id": 4,
+      "question": "Що зображено на цьому фото?",
+      "type": "multiple_choice",
+      "options": ["Сонце", "Місяць", "Зірка", "Планета"],
+      "answer": "Сонце",
+      "image": "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=400&h=300&fit=crop"
+    },
+    {
+      "id": 5,
+      "question": "Який математичний символ зображено на картинці?",
+      "type": "text",
+      "answer": "пі",
+      "image": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&h=300&fit=crop"
+    },
+    {
+      "id": 6,
+      "question": "Визначте тип цього графіка",
+      "type": "multiple_choice",
+      "options": [
+        "Лінійний графік",
+        "Стовпчаста діаграма",
+        "Кругова діаграма",
+        "Гістограма"
+      ],
+      "answer": "Лінійний графік",
+      "image": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop"
     }
   ]
 }

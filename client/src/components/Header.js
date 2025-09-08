@@ -1,39 +1,59 @@
 import React from "react";
 import "./Header.css";
+import { ArrowIcon } from "./Icons/ArrowIcon";
 
-const Header = ({ user, onLogout, name, quizTitle, timeRemaining, timeExpired }) => {
+const Header = ({
+  user,
+  onLogout,
+  name,
+  quizTitle,
+  timeRemaining,
+  timeExpired,
+  isCompleted,
+  backToQuizzes,
+}) => {
   const formatTime = (seconds) => {
-    if (seconds === null || seconds === undefined) return '';
+    if (seconds === null || seconds === undefined) return "";
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const onBackToQuizzes = (e) => {
+    // TODO: Change function to react router
+    backToQuizzes();
   };
 
   return (
     <header className="header">
       <div className="header-content">
-        <div className="header-left">
-          <h1>Система тестування</h1>
-          {quizTitle && <h2>{quizTitle}</h2>}
-        </div>
-        
+        {quizTitle && (
+          <ArrowIcon
+            onClick={() => onBackToQuizzes()}
+            className="header-icon"
+          />
+        )}
+
+        <div className="header-left"></div>
+
         <div className="header-right">
-          {timeRemaining !== null && (
-            <div className={`timer ${timeExpired ? 'expired' : ''}`}>
-              {timeExpired ? 'Час вичерпано' : `Залишилось: ${formatTime(timeRemaining)}`}
+          {timeRemaining !== null && !isCompleted && (
+            <div className={`timer`}>
+              Залишилось: {formatTime(timeRemaining)}
             </div>
           )}
-          
+
           <div className="user-info">
             {user && (
-              <span>Привіт, {user.fullName || user.username}!</span>
+              <>
+                <span className="user-greeting">
+                  Привіт, {user.fullName || user.username}!
+                </span>
+                <button className="logout-btn" onClick={onLogout}>
+                  Вийти
+                </button>
+              </>
             )}
-            {name && (
-              <span className="student-name">Студент: {name}</span>
-            )}
-            <button className="logout-btn" onClick={onLogout}>
-              Вийти
-            </button>
           </div>
         </div>
       </div>

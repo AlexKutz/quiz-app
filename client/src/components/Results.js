@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import "./Results.css";
 import MathJaxText from "./MathJaxText";
+import Confetti from "./Confetti";
 
 const Results = ({
   results,
@@ -11,8 +12,15 @@ const Results = ({
   quizTitle,
   onBackToQuizzes,
   timeExpired,
+  confettiShown = false, // Добавляем пропс
+  onMarkConfettiShown, // Добавляем функцию для отметки конфетти
 }) => {
   // Якщо час вичерпано, але немає результатів, показуємо тільки повідомлення
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   if (timeExpired && !results) {
     return (
       <div className="results-container">
@@ -74,8 +82,29 @@ const Results = ({
     }
   };
 
+  // Показываем конфетти только если все ответы правильные и конфетти еще не показывали
+  const shouldShowConfetti =
+    results &&
+    results.filter((r) => r.correct).length === results.length &&
+    !confettiShown;
+
+  const handleConfettiComplete = () => {
+    console.log("Confetti finished!");
+    // Отмечаем в базе данных, что конфетти было показано
+    if (onMarkConfettiShown) {
+      onMarkConfettiShown();
+    }
+  };
+
   return (
     <div className="results-container">
+      {shouldShowConfetti && (
+        <Confetti
+          duration={6000}
+          particleCount={50}
+          onComplete={handleConfettiComplete}
+        />
+      )}
       {timeExpired && (
         <div className="time-expired-message">
           <h2 className="results-title">Час вичерпано</h2>

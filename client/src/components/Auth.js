@@ -6,6 +6,7 @@ const Auth = ({ onLogin, onRegister }) => {
   const [formData, setFormData] = useState({
     fullName: "",
     password: "",
+    confirmPassword: "",
   });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -50,14 +51,32 @@ const Auth = ({ onLogin, onRegister }) => {
     setLoading(true);
     setMessage("");
 
+    // Валідація для реєстрації
+    if (!isLoginMode) {
+      if (formData.password !== formData.confirmPassword) {
+        setMessage("Паролі не співпадають");
+        setLoading(false);
+        return;
+      }
+      if (formData.password.length < 6) {
+        setMessage("Пароль повинен містити щонайменше 6 символів");
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const endpoint = isLoginMode ? "/auth/login" : "/auth/register";
+      const requestData = isLoginMode
+        ? { fullName: formData.fullName, password: formData.password }
+        : { fullName: formData.fullName, password: formData.password };
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(requestData),
       });
 
       const result = await response.json();
@@ -71,11 +90,37 @@ const Auth = ({ onLogin, onRegister }) => {
           );
           onLogin(result.user);
         } else {
-          setMessage("Реєстрація успішна! Тепер можете увійти в систему.");
-          setTimeout(() => {
-            setIsLoginMode(true);
-            setFormData({ fullName: "", password: "" });
-          }, 2000);
+          // Після успішної реєстрації автоматично логінимо користувача
+          setMessage("Реєстрація успішна! Автоматичний вхід...");
+
+          // Автоматично логінимо користувача
+          const loginResponse = await fetch("/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fullName: formData.fullName,
+              password: formData.password,
+            }),
+          });
+
+          const loginResult = await loginResponse.json();
+
+          if (loginResponse.ok) {
+            localStorage.setItem("authToken", loginResult.token);
+            localStorage.setItem(
+              "userName",
+              loginResult.user.fullName || loginResult.user.username
+            );
+            onLogin(loginResult.user);
+          } else {
+            setMessage("Реєстрація успішна! Тепер можете увійти в систему.");
+            setTimeout(() => {
+              setIsLoginMode(true);
+              setFormData({ fullName: "", password: "", confirmPassword: "" });
+            }, 2000);
+          }
         }
       } else {
         setMessage(result.error);
@@ -90,7 +135,7 @@ const Auth = ({ onLogin, onRegister }) => {
   const toggleMode = () => {
     setIsLoginMode(!isLoginMode);
     setMessage("");
-    setFormData({ fullName: "", password: "" });
+    setFormData({ fullName: "", password: "", confirmPassword: "" });
   };
 
   return (
@@ -124,6 +169,21 @@ const Auth = ({ onLogin, onRegister }) => {
               disabled={loading}
             />
           </div>
+
+          {!isLoginMode && (
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Підтвердіть пароль:</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+                required
+                disabled={loading}
+              />
+            </div>
+          )}
 
           <button type="submit" className="submit-btn" disabled={loading}>
             {loading

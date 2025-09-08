@@ -29,11 +29,40 @@ class DatabaseManager {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         quiz_id TEXT NOT NULL,
-        ip TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
+        FOREIGN KEY (quiz_id) REFERENCES quizzes(id),
+        UNIQUE(name, quiz_id)
       )
     `);
+
+    // Миграция: удаляем поле ip из таблицы students если оно существует
+    try {
+      this.db.exec(`
+        CREATE TABLE students_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          quiz_id TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (quiz_id) REFERENCES quizzes(id),
+          UNIQUE(name, quiz_id)
+        )
+      `);
+
+      this.db.exec(`
+        INSERT INTO students_new (id, name, quiz_id, created_at)
+        SELECT id, name, quiz_id, created_at FROM students
+      `);
+
+      this.db.exec(`DROP TABLE students`);
+      this.db.exec(`ALTER TABLE students_new RENAME TO students`);
+
+      console.log("Migration completed: removed ip field from students table");
+    } catch (error) {
+      // Если миграция не удалась, значит таблица уже в правильном формате
+      console.log(
+        "Students table is already in correct format or migration not needed"
+      );
+    }
 
     // Таблица сессий
     this.db.exec(`
@@ -64,6 +93,7 @@ class DatabaseManager {
         correct_count INTEGER NOT NULL,
         auto_saved BOOLEAN DEFAULT FALSE,
         time_expired BOOLEAN DEFAULT FALSE,
+        confetti_shown BOOLEAN DEFAULT FALSE,
         FOREIGN KEY (student_id) REFERENCES students(id),
         FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
       )
@@ -113,11 +143,11 @@ class DatabaseManager {
 
       // Students
       insertStudent: this.db.prepare(`
-        INSERT INTO students (name, quiz_id, ip)
-        VALUES (?, ?, ?)
+        INSERT OR IGNORE INTO students (name, quiz_id)
+        VALUES (?, ?)
       `),
       getStudent: this.db.prepare(`
-        SELECT * FROM students WHERE name = ? AND quiz_id = ? AND ip = ?
+        SELECT * FROM students WHERE name = ? AND quiz_id = ?
       `),
       getStudentById: this.db.prepare(`SELECT * FROM students WHERE id = ?`),
 
@@ -127,17 +157,17 @@ class DatabaseManager {
         VALUES (?, ?, ?, ?, ?)
       `),
       getSession: this.db.prepare(`
-        SELECT s.*, st.name, st.ip 
+        SELECT s.*, st.name 
         FROM sessions s
         JOIN students st ON s.student_id = st.id
-        WHERE st.name = ? AND s.quiz_id = ? AND st.ip = ?
+        WHERE st.name = ? AND s.quiz_id = ?
       `),
       updateSessionAnswers: this.db.prepare(`
         UPDATE sessions SET answers = ? WHERE id = ?
       `),
       deleteSession: this.db.prepare(`DELETE FROM sessions WHERE id = ?`),
       getAllSessions: this.db.prepare(`
-        SELECT s.*, st.name, st.ip, q.title as quiz_title
+        SELECT s.*, st.name, q.title as quiz_title
         FROM sessions s
         JOIN students st ON s.student_id = st.id
         JOIN quizzes q ON s.quiz_id = q.id
@@ -145,24 +175,29 @@ class DatabaseManager {
 
       // Results
       insertResult: this.db.prepare(`
-        INSERT INTO results (student_id, quiz_id, results, attempts, average_score, total_score, correct_count, auto_saved, time_expired)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO results (student_id, quiz_id, results, attempts, average_score, total_score, correct_count, auto_saved, time_expired, confetti_shown)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       updateResult: this.db.prepare(`
         UPDATE results 
         SET results = ?, attempts = ?, completed_at = CURRENT_TIMESTAMP, 
-            average_score = ?, total_score = ?, correct_count = ?, auto_saved = ?, time_expired = ?
+            average_score = ?, total_score = ?, correct_count = ?, auto_saved = ?, time_expired = ?, confetti_shown = ?
+        WHERE student_id = ? AND quiz_id = ?
+      `),
+      updateConfettiShown: this.db.prepare(`
+        UPDATE results 
+        SET confetti_shown = TRUE
         WHERE student_id = ? AND quiz_id = ?
       `),
       getResult: this.db.prepare(`
-        SELECT r.*, st.name, st.ip, q.title as quiz_title
+        SELECT r.*, st.name, q.title as quiz_title
         FROM results r
         JOIN students st ON r.student_id = st.id
         JOIN quizzes q ON r.quiz_id = q.id
-        WHERE st.name = ? AND r.quiz_id = ? AND st.ip = ?
+        WHERE st.name = ? AND r.quiz_id = ?
       `),
       getResultsByQuiz: this.db.prepare(`
-        SELECT r.*, st.name, st.ip, q.title as quiz_title
+        SELECT r.*, st.name, q.title as quiz_title
         FROM results r
         JOIN students st ON r.student_id = st.id
         JOIN quizzes q ON r.quiz_id = q.id
@@ -265,18 +300,10 @@ class DatabaseManager {
 
           for (const result of resultsData) {
             // Находим или создаем студента
-            let student = this.queries.getStudent.get(
-              result.name,
-              quizId,
-              result.ip
-            );
+            let student = this.queries.getStudent.get(result.name, quizId);
             if (!student) {
-              this.queries.insertStudent.run(result.name, quizId, result.ip);
-              student = this.queries.getStudent.get(
-                result.name,
-                quizId,
-                result.ip
-              );
+              this.queries.insertStudent.run(result.name, quizId);
+              student = this.queries.getStudent.get(result.name, quizId);
             }
 
             // Вставляем результат
@@ -289,7 +316,8 @@ class DatabaseManager {
               result.totalScore || 0,
               result.correctCount || 0,
               result.autoSaved || false,
-              result.timeExpired || false
+              result.timeExpired || false,
+              result.confettiShown || false
             );
           }
 
@@ -322,6 +350,7 @@ class DatabaseManager {
         maxAttempts: settings.maxAttempts,
         totalQuestions: questions.length,
         randomQuestionsCount: settings.randomQuestionsCount,
+        timeLimit: settings.timeLimit,
         students: settings.students || [],
       };
     });
@@ -342,12 +371,12 @@ class DatabaseManager {
   }
 
   // Методы для работы с сессиями
-  createSession(studentName, quizId, ip, questions) {
+  createSession(studentName, quizId, questions) {
     // Находим или создаем студента
-    let student = this.queries.getStudent.get(studentName, quizId, ip);
+    let student = this.queries.getStudent.get(studentName, quizId);
     if (!student) {
-      this.queries.insertStudent.run(studentName, quizId, ip);
-      student = this.queries.getStudent.get(studentName, quizId, ip);
+      this.queries.insertStudent.run(studentName, quizId);
+      student = this.queries.getStudent.get(studentName, quizId);
     }
 
     const startTime = Date.now();
@@ -362,8 +391,8 @@ class DatabaseManager {
     return { student, startTime };
   }
 
-  getSession(studentName, quizId, ip) {
-    return this.queries.getSession.get(studentName, quizId, ip);
+  getSession(studentName, quizId) {
+    return this.queries.getSession.get(studentName, quizId);
   }
 
   updateSessionAnswers(sessionId, answers) {
@@ -379,8 +408,8 @@ class DatabaseManager {
   }
 
   // Методы для работы с результатами
-  getResult(studentName, quizId, ip) {
-    return this.queries.getResult.get(studentName, quizId, ip);
+  getResult(studentName, quizId) {
+    return this.queries.getResult.get(studentName, quizId);
   }
 
   saveResult(
@@ -392,7 +421,8 @@ class DatabaseManager {
     totalScore,
     correctCount,
     autoSaved = false,
-    timeExpired = false
+    timeExpired = false,
+    confettiShown = false
   ) {
     this.queries.insertResult.run(
       studentId,
@@ -403,7 +433,8 @@ class DatabaseManager {
       totalScore,
       correctCount,
       autoSaved,
-      timeExpired
+      timeExpired,
+      confettiShown
     );
   }
 
@@ -416,7 +447,8 @@ class DatabaseManager {
     totalScore,
     correctCount,
     autoSaved = false,
-    timeExpired = false
+    timeExpired = false,
+    confettiShown = false
   ) {
     this.queries.updateResult.run(
       JSON.stringify(results),
@@ -426,9 +458,14 @@ class DatabaseManager {
       correctCount,
       autoSaved,
       timeExpired,
+      confettiShown,
       studentId,
       quizId
     );
+  }
+
+  markConfettiShown(studentId, quizId) {
+    this.queries.updateConfettiShown.run(studentId, quizId);
   }
 
   getResultsByQuiz(quizId) {

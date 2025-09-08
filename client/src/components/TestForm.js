@@ -1,127 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo, useCallback } from "react";
 import "./TestForm.css";
 import MathJaxText from "./MathJaxText";
+import { useTimer } from "../contexts/TimerContext";
 
-const TestForm = ({
-  questions,
-  onSubmit,
-  loading,
-  timeRemaining,
-  timeLimit,
-  onAnswersChange,
-  savedAnswers = {}, // Додаємо пропс для збережених відповідей
-}) => {
-  const [answers, setAnswers] = useState(savedAnswers);
-  const [rightColumnOrder, setRightColumnOrder] = useState({});
-  const [draggedItem, setDraggedItem] = useState(null);
-  const [dragOverIndex, setDragOverIndex] = useState(null);
-
-  // Синхронізуємо локальний стан з збереженими відповідями
-  useEffect(() => {
-    console.log('TestForm useEffect:', { savedAnswers, answers });
-    if (savedAnswers && Object.keys(savedAnswers).length > 0) {
-      setAnswers(savedAnswers);
-    }
-  }, [savedAnswers]);
-
-  const handleAnswerChange = (questionId, value) => {
-    console.log('handleAnswerChange called:', { questionId, value, currentAnswers: answers });
-    const newAnswers = {
-      ...answers,
-      [questionId]: value,
-    };
-    console.log('newAnswers:', newAnswers);
-    setAnswers(prev => {
-      console.log('setAnswers called:', { prev, newAnswers });
-      return newAnswers;
-    });
-    if (onAnswersChange) {
-      console.log('Calling onAnswersChange with:', newAnswers);
-      onAnswersChange(newAnswers);
-    } else {
-      console.log('onAnswersChange is not defined');
-    }
-  };
-
-  const handleMatchingAnswerChange = (questionId, leftIndex, rightIndex) => {
-    const newAnswers = {
-      ...answers,
-      [questionId]: {
-        ...answers[questionId],
-        [leftIndex]: rightIndex,
-      },
-    };
-    setAnswers(newAnswers);
-    if (onAnswersChange) {
-      onAnswersChange(newAnswers);
-    }
-  };
-
-  const handleDragStart = (e, originalIndex, questionId) => {
-    setDraggedItem({ originalIndex, questionId });
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/html", e.target.outerHTML);
-  };
-
-  const handleDragOver = (e, targetIndex) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(targetIndex);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = (e, targetIndex, questionId) => {
-    e.preventDefault();
-
-    if (draggedItem && draggedItem.questionId === questionId) {
-      const question = questions.find((q) => q.id === questionId);
-      if (!question) return;
-
-      const currentOrder =
-        rightColumnOrder[questionId] ||
-        question.rightColumn.map((_, index) => index);
-
-      const draggedIndex = currentOrder.indexOf(draggedItem.originalIndex);
-      const newOrder = [...currentOrder];
-
-      // Видаляємо елемент з поточної позиції
-      const [movedItem] = newOrder.splice(draggedIndex, 1);
-      // Вставляємо на нову позицію
-      newOrder.splice(targetIndex, 0, movedItem);
-
-      setRightColumnOrder({
-        ...rightColumnOrder,
-        [questionId]: newOrder,
-      });
-
-      // Оновлюємо відповіді згідно з новим порядком
-      const newAnswers = { ...answers };
-      if (newAnswers[questionId]) {
-        const updatedAnswers = {};
-        Object.keys(newAnswers[questionId]).forEach((leftIndex) => {
-          const oldRightIndex = newAnswers[questionId][leftIndex];
-          const newRightIndex = newOrder.indexOf(parseInt(oldRightIndex));
-          updatedAnswers[leftIndex] = newRightIndex.toString();
-        });
-        newAnswers[questionId] = updatedAnswers;
-        setAnswers(newAnswers);
-        if (onAnswersChange) {
-          onAnswersChange(newAnswers);
-        }
-      }
-    }
-
-    setDraggedItem(null);
-    setDragOverIndex(null);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(answers);
-  };
+// Окремий компонент для таймера, щоб уникнути перерендеру всього TestForm
+const Timer = memo(() => {
+  const { timeRemaining, timeLimit } = useTimer();
 
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
@@ -129,18 +13,98 @@ const TestForm = ({
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
-  const renderQuestion = (question, index) => {
-    console.log('renderQuestion called:', { questionId: question.id, answers, savedAnswers });
-    
+  if (!timeLimit || timeRemaining === null) {
+    return null;
+  }
+
+  return (
+    <div className={`timer ${timeRemaining <= 60 ? "timer-warning" : ""}`}>
+      Залишилось: {formatTime(timeRemaining)}
+    </div>
+  );
+});
+
+// Окремий компонент для зображення з мемоізацією
+const QuestionImage = memo(({ imageUrl, alt = "Зображення до питання" }) => {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+
+  const handleImageLoad = useCallback(() => {
+    setImageLoading(false);
+  }, []);
+
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+    setImageLoading(false);
+  }, []);
+
+  if (imageError) {
+    return (
+      <div className="image-error">
+        <p>Не вдалося завантажити зображення</p>
+        <p className="image-url">URL: {imageUrl}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="question-image-container">
+      {imageLoading && (
+        <div className="image-loading">
+          <p>Завантаження зображення...</p>
+        </div>
+      )}
+      <img
+        src={imageUrl}
+        alt={alt}
+        className="question-image"
+        onLoad={handleImageLoad}
+        onError={handleImageError}
+        style={{ display: imageLoading ? "none" : "block" }}
+      />
+    </div>
+  );
+});
+
+// Окремий компонент для питання з мемоізацією
+const QuestionItem = memo(
+  ({
+    question,
+    index,
+    answers,
+    onAnswerChange,
+    rightColumnOrder,
+    onDragStart,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    draggedItem,
+    dragOverIndex,
+  }) => {
+    const handleAnswerChange = useCallback(
+      (questionId, value) => {
+        onAnswerChange(questionId, value);
+      },
+      [onAnswerChange]
+    );
+
     if (question.type === "multiple_choice") {
       return (
-        <div key={question.id} className="question-item">
+        <div className="question-item">
           <label className="question-label">
             <span className="question-number">{index + 1}.</span>
             <MathJaxText className="question-text">
               {question.question}
             </MathJaxText>
           </label>
+
+          {question.image && (
+            <QuestionImage
+              imageUrl={question.image}
+              alt={`Зображення до питання ${index + 1}`}
+            />
+          )}
+
           <div className="options-container">
             {question.options &&
               question.options.map((option, optionIndex) => (
@@ -150,10 +114,9 @@ const TestForm = ({
                     name={`question_${question.id}`}
                     value={option}
                     checked={answers[question.id] === option}
-                    onChange={(e) => {
-                      console.log('Radio change:', { questionId: question.id, value: e.target.value, currentAnswer: answers[question.id] });
-                      handleAnswerChange(question.id, e.target.value);
-                    }}
+                    onChange={(e) =>
+                      handleAnswerChange(question.id, e.target.value)
+                    }
                     className="option-input"
                   />
                   <MathJaxText className="option-text">{option}</MathJaxText>
@@ -163,26 +126,25 @@ const TestForm = ({
         </div>
       );
     } else if (question.type === "matching") {
-      // Детальна перевірка для matching питань
       if (!question.leftColumn || !question.rightColumn) {
-        console.error("Missing columns:", {
-          leftColumn: question.leftColumn,
-          rightColumn: question.rightColumn,
-        });
         return (
-          <div key={question.id} className="question-item">
+          <div className="question-item">
             <label className="question-label">
               <span className="question-number">{index + 1}.</span>
               <MathJaxText className="question-text">
                 {question.question}
               </MathJaxText>
             </label>
+
+            {question.image && (
+              <QuestionImage
+                imageUrl={question.image}
+                alt={`Зображення до питання ${index + 1}`}
+              />
+            )}
+
             <div className="error-message">
               Помилка: відсутні дані для питання на об'єднання
-              <br />
-              LeftColumn: {question.leftColumn ? "OK" : "MISSING"}
-              <br />
-              RightColumn: {question.rightColumn ? "OK" : "MISSING"}
             </div>
           </div>
         );
@@ -192,18 +154,22 @@ const TestForm = ({
         !Array.isArray(question.leftColumn) ||
         !Array.isArray(question.rightColumn)
       ) {
-        console.error("Columns are not arrays:", {
-          leftColumn: typeof question.leftColumn,
-          rightColumn: typeof question.rightColumn,
-        });
         return (
-          <div key={question.id} className="question-item">
+          <div className="question-item">
             <label className="question-label">
               <span className="question-number">{index + 1}.</span>
               <MathJaxText className="question-text">
                 {question.question}
               </MathJaxText>
             </label>
+
+            {question.image && (
+              <QuestionImage
+                imageUrl={question.image}
+                alt={`Зображення до питання ${index + 1}`}
+              />
+            )}
+
             <div className="error-message">
               Помилка: колонки повинні бути масивами
             </div>
@@ -216,13 +182,21 @@ const TestForm = ({
         question.rightColumn.map((_, index) => index);
 
       return (
-        <div key={question.id} className="question-item">
+        <div className="question-item">
           <label className="question-label">
             <span className="question-number">{index + 1}.</span>
             <MathJaxText className="question-text">
               {question.question}
             </MathJaxText>
           </label>
+
+          {question.image && (
+            <QuestionImage
+              imageUrl={question.image}
+              alt={`Зображення до питання ${index + 1}`}
+            />
+          )}
+
           <div className="matching-container">
             <div className="matching-instructions">
               <p>
@@ -251,11 +225,11 @@ const TestForm = ({
                       }`}
                       draggable
                       onDragStart={(e) =>
-                        handleDragStart(e, originalIndex, question.id)
+                        onDragStart(e, originalIndex, question.id)
                       }
-                      onDragOver={(e) => handleDragOver(e, displayIndex)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, displayIndex, question.id)}
+                      onDragOver={(e) => onDragOver(e, displayIndex)}
+                      onDragLeave={onDragLeave}
+                      onDrop={(e) => onDrop(e, displayIndex, question.id)}
                     >
                       <span className="item-label">{displayIndex + 1}.</span>
                       <MathJaxText>
@@ -271,15 +245,23 @@ const TestForm = ({
         </div>
       );
     } else {
-      // Текстове питання (тип за замовчуванням)
+      // Текстове питання
       return (
-        <div key={question.id} className="question-item">
+        <div className="question-item">
           <label className="question-label">
             <span className="question-number">{index + 1}.</span>
             <MathJaxText className="question-text">
               {question.question}
             </MathJaxText>
           </label>
+
+          {question.image && (
+            <QuestionImage
+              imageUrl={question.image}
+              alt={`Зображення до питання ${index + 1}`}
+            />
+          )}
+
           <input
             type="text"
             value={answers[question.id] || ""}
@@ -290,29 +272,139 @@ const TestForm = ({
         </div>
       );
     }
-  };
+  }
+);
 
-  return (
-    <div className="test-form-container">
-      <div className="test-header">
-        <h2 className="test-title">Тест</h2>
-        {timeLimit && timeRemaining !== null && (
-          <div
-            className={`timer ${timeRemaining <= 60 ? "timer-warning" : ""}`}
-          >
-            Залишилось: {formatTime(timeRemaining)}
-          </div>
-        )}
+const TestForm = memo(
+  ({ questions, onSubmit, loading, onAnswersChange, savedAnswers = {} }) => {
+    const [answers, setAnswers] = useState(savedAnswers);
+    const [rightColumnOrder, setRightColumnOrder] = useState({});
+    const [draggedItem, setDraggedItem] = useState(null);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
+
+    // Синхронізуємо локальний стан з збереженими відповідями
+    useEffect(() => {
+      if (savedAnswers && Object.keys(savedAnswers).length > 0) {
+        setAnswers(savedAnswers);
+      }
+    }, [savedAnswers]);
+
+    const handleAnswerChange = useCallback(
+      (questionId, value) => {
+        const newAnswers = {
+          ...answers,
+          [questionId]: value,
+        };
+        setAnswers(newAnswers);
+        if (onAnswersChange) {
+          onAnswersChange(newAnswers);
+        }
+      },
+      [answers, onAnswersChange]
+    );
+
+    const handleDragStart = useCallback((e, originalIndex, questionId) => {
+      setDraggedItem({ originalIndex, questionId });
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/html", e.target.outerHTML);
+    }, []);
+
+    const handleDragOver = useCallback((e, targetIndex) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDragOverIndex(targetIndex);
+    }, []);
+
+    const handleDragLeave = useCallback(() => {
+      setDragOverIndex(null);
+    }, []);
+
+    const handleDrop = useCallback(
+      (e, targetIndex, questionId) => {
+        e.preventDefault();
+
+        if (draggedItem && draggedItem.questionId === questionId) {
+          const question = questions.find((q) => q.id === questionId);
+          if (!question) return;
+
+          const currentOrder =
+            rightColumnOrder[questionId] ||
+            question.rightColumn.map((_, index) => index);
+
+          const draggedIndex = currentOrder.indexOf(draggedItem.originalIndex);
+          const newOrder = [...currentOrder];
+
+          const [movedItem] = newOrder.splice(draggedIndex, 1);
+          newOrder.splice(targetIndex, 0, movedItem);
+
+          setRightColumnOrder({
+            ...rightColumnOrder,
+            [questionId]: newOrder,
+          });
+
+          const newAnswers = { ...answers };
+          if (newAnswers[questionId]) {
+            const updatedAnswers = {};
+            Object.keys(newAnswers[questionId]).forEach((leftIndex) => {
+              const oldRightIndex = newAnswers[questionId][leftIndex];
+              const newRightIndex = newOrder.indexOf(parseInt(oldRightIndex));
+              updatedAnswers[leftIndex] = newRightIndex.toString();
+            });
+            newAnswers[questionId] = updatedAnswers;
+            setAnswers(newAnswers);
+            if (onAnswersChange) {
+              onAnswersChange(newAnswers);
+            }
+          }
+        }
+
+        setDraggedItem(null);
+        setDragOverIndex(null);
+      },
+      [draggedItem, questions, rightColumnOrder, answers, onAnswersChange]
+    );
+
+    const handleSubmit = useCallback(
+      (e) => {
+        e.preventDefault();
+        onSubmit(answers);
+      },
+      [onSubmit, answers]
+    );
+
+    return (
+      <div className="test-form-container">
+        <div className="test-header">
+          <h2 className="test-title">Тест</h2>
+          <Timer />
+        </div>
+        <form onSubmit={handleSubmit} className="test-form">
+          {questions.map((question, index) => (
+            <QuestionItem
+              key={question.id}
+              question={question}
+              index={index}
+              answers={answers}
+              onAnswerChange={handleAnswerChange}
+              rightColumnOrder={rightColumnOrder}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              draggedItem={draggedItem}
+              dragOverIndex={dragOverIndex}
+            />
+          ))}
+
+          <button type="submit" className="submit-button" disabled={loading}>
+            {loading ? "Відправлення..." : "Відправити відповіді"}
+          </button>
+        </form>
       </div>
-      <form onSubmit={handleSubmit} className="test-form">
-        {questions.map((question, index) => renderQuestion(question, index))}
+    );
+  }
+);
 
-        <button type="submit" className="submit-button" disabled={loading}>
-          {loading ? "Відправлення..." : "Відправити відповіді"}
-        </button>
-      </form>
-    </div>
-  );
-};
+TestForm.displayName = "TestForm";
 
 export default TestForm;
