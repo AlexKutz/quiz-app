@@ -150,6 +150,7 @@ const Auth = ({ onLogin, onRegister }) => {
               type="text"
               id="fullName"
               name="fullName"
+              placeholder={isLoginMode ? null : "Наприклад: Іван Іванов"}
               value={formData.fullName}
               onChange={handleInputChange}
               required

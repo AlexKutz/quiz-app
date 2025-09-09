@@ -3,32 +3,33 @@
     "title": "Фізика 10 клас. Тема №1: Зародження і роз виток фізики як науки",
     "maxAttempts": 1,
     "randomQuestionsCount": 12,
-    "timeLimit": 1
+    "timeLimit": 100
   },
   "questions": [
     {
       "id": 1,
-      "question": "Коли почався період класичної фізики?",
+      "question": "Коли почався період, що вважається «Класичною фізикою»?",
       "type": "multiple_choice",
       "options": [
-        "Кінець XVII ст.",
+        "Кінець XIX ст.",
         "Початок XVII ст.",
-        "Кінець XVIII ст.",
-        "Початок XIX ст."
+        "Кінець XX ст.",
+        "Антична Греція"
       ],
-      "answer": "Кінець XVII ст."
+      "answer": "Початок XVII ст."
     },
     {
       "id": 2,
-      "question": "Хто заклав теоретичні основи сучасної електротехніки та радіозв'язку?",
+      "question": "Хто сформулював загальні уявлення про будову Всесвіту і закони механіки, які визначили розвиток фізики на 300 років наперед ?",
       "type": "multiple_choice",
       "options": [
         "Альберт Ейнштейн",
         "Ісаак Ньютон",
-        "Джеймс Максвелл",
-        "Нільс Бор"
+        "Галілео Галілей",
+        "Джеймс Максвелл"
       ],
-      "answer": "Джеймс Максвелл"
+      "answer": "Ісаак Ньютон",
+      "image": "data:image/jpeg;base64,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"
     },
     {
       "id": 3,
@@ -40,103 +41,110 @@
         "Джеймс Максвелл",
         "Анрі Беккерель"
       ],
-      "answer": "Ернест Резерфорд"
+      "answer": "Ернест Резерфорд",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_etqdw_GYGLqReZUOlj2YI-fdKlg-BdkToN7N5H4OFIDLTm-PTnf1_KuNgb7_nt8cEn0&usqp=CAU"
     },
     {
       "id": 4,
-      "question": "Хто сформулював закон всесвітнього тяжіння та основні закони механіки?",
-      "type": "multiple_choice",
-      "options": ["Галілео Галілей", "Ісаак Ньютон", "Архімед", "Аристотель"],
-      "answer": "Ісаак Ньютон"
-    },
-    {
-      "id": 5,
-      "question": "Яка теорія об'єднує сильну, слабку та електромагнітну взаємодії елементарних частинок?",
+      "question": "Хто був одним із засновників сучасної теоретичної фізики і створив загальну теорію відносності?",
       "type": "multiple_choice",
       "options": [
-        "Квантова механіка",
-        "Теорія відносності",
+        "Нільс Бор",
+        "Ернест Резерфорд",
+        "Альберт Ейнштейн",
+        "Джеймс Максвелл"
+      ],
+      "answer": "Альберт Ейнштейн",
+      "image": "https://ru.citaty.net/media/authors/albert-einstein.jpg"
+    },
+    {
+      "id": 6,
+      "question": "Хто з давньогрецьких філософів висунув ідею геліоцентричної будови світу?",
+      "type": "multiple_choice",
+      "options": ["Арістотель", "Демокріт", "Аристарх Самоський", "Архімед"],
+      "answer": "Аристарх Самоський"
+    },
+    {
+      "id": 7,
+      "question": "Хто з вчених, розробив квантову теорію планетарного атома? Розробив фізичні ідеї квантової механіки.",
+      "type": "multiple_choice",
+      "options": [
+        "Нільс Бор",
+        "Альберт Ейнштейн",
+        "Ернест Резерфорд",
+        "Макс Планк"
+      ],
+      "answer": "Нільс Бор"
+    },
+    {
+      "id": 8,
+      "question": "Відкриття яких явищ і технологій належать Галілео Галілею?",
+      "type": "multiple_choice",
+      "options": [
+        "Закон всесвітнього тяжіння",
+        "Будову атома, квантову теорію планетарного атома",
+        "Закон Архімеда",
+        "Відкриття принципу відносності в механіці, обґрунтування геліоцентричної будови світу, винахід термометра"
+      ],
+      "answer": "Відкриття принципу відносності в механіці, обґрунтування геліоцентричної будови світу, винахід термометра"
+    },
+    {
+      "id": 9,
+      "question": "Згідно з даними досліджень, наведених у тексті підручника, як швидко зростає обсяг інформації?",
+      "type": "multiple_choice",
+      "options": [
+        "Подвоюється кожні 5 років",
+        "Зростає лінійно",
+        "Подвоюється кожні півтора року",
+        "Подвоюється кожні 10 років"
+      ],
+      "answer": "Подвоюється кожні півтора року"
+    },
+    {
+      "id": 10,
+      "question": "Яка фізична теорія, на сьогоднішній день узгоджується з експериментами і пояснює взаємодію елементарних частинок?",
+      "type": "multiple_choice",
+      "options": [
+        "Загальна теорія відносності",
         "Стандартна модель",
-        "Теорія струн"
+        "Класична механіка",
+        "Квантова механіка"
       ],
       "answer": "Стандартна модель"
     },
     {
-      "id": 6,
+      "id": 11,
       "question": "Що, за словами Стівена Гокінга, означає прогрес у фізиці?",
       "type": "multiple_choice",
       "options": [
         "Заміна неправильної теорії на правильну",
-        "Заміна неправильної теорії на ще неправильнішу, але вже уточнену",
+        "Заміна неправильної теорії на іншу неправильну, але вже уточнену",
         "Заміна правильної теорії на нову, більш складну",
         "Заміна правильної теорії на неправильну"
       ],
       "answer": "Заміна неправильної теорії на ще неправильнішу, але вже уточнену"
     },
     {
-      "id": 7,
-      "question": "В яких роках жив Галілео Галілей?",
+      "id": 12,
+      "question": "З яким етапом розвитку фізики пов'язують відкриття Галілео Галілея?",
       "type": "multiple_choice",
-      "options": ["1642-1727", "1879-1955", "1564-1642", "1871-1937"],
-      "answer": "1564-1642"
+      "options": [
+        "Становлення фізики",
+        "Фізика елементарних частинок",
+        "Формування фізики як науки",
+        "Новітня фізика"
+      ],
+      "answer": "Формування фізики як науки"
     },
     {
-      "id": 8,
+      "id": 13,
       "question": "Який філософ Стародавньої Греції висунув гіпотезу про атомарну будову речовини?",
       "type": "multiple_choice",
       "options": ["Аристотель", "Аристарх Самоський", "Архімед", "Демокріт"],
       "answer": "Демокріт"
     },
     {
-      "id": 9,
-      "question": "В якому році відкриття радіоактивності Анрі Беккерелем розпочало дослідження ядерної фізики?",
-      "type": "multiple_choice",
-      "options": [
-        "Кінець XVII ст.",
-        "Кінець XIX ст.",
-        "Початок XX ст.",
-        "Початок XVIII ст."
-      ],
-      "answer": "Кінець XIX ст."
-    },
-    {
-      "id": 10,
-      "question": "Хто сформулював теорію, що об'єднала простір і час з енергією та імпульсом матеріальних тіл?",
-      "type": "multiple_choice",
-      "options": [
-        "Нільс Бор",
-        "Макс Планк",
-        "Альберт Ейнштейн",
-        "Ернест Резерфорд"
-      ],
-      "answer": "Альберт Ейнштейн"
-    },
-    {
-      "id": 11,
-      "question": "Які відкриття зробив Ісаак Ньютон",
-      "type": "multiple_choice",
-      "options": [
-        "Установлення структури атома як системи, що складається з ядра, яке має позитивний заряд, та електронів, заряджених негативно. Вважається «батьком» ядерної фізики.",
-        "Відкриття принципу відносності в механіці, обґрунтування геліоцентричної будови світу, створення телескопа, відкриття в астрономії, винайдення термометра та ін.",
-        "Створення квантової теорії планетарного атома, розроблення фізичних ідей квантової механіки.",
-        "Анрі Один із засновників сучасної теоретичної фізики"
-      ],
-      "answer": "Установлення структури атома як системи, що складається з ядра, яке має позитивний заряд, та електронів, заряджених негативно. Вважається «батьком» ядерної фізики."
-    },
-    {
-      "id": 12,
-      "question": "Чим відомий Галілео Галілей?",
-      "type": "multiple_choice",
-      "options": [
-        "Обґрунтування геліоцентричної будови світу, винайдення телескопа та термометра.",
-        "Сформулювання теорії електромагнітного поля, що стала основою для радіозв'язку.",
-        "Створення квантової теорії планетарного атома.",
-        "Формулювання закону всесвітнього тяжіння та основних законів механіки."
-      ],
-      "answer": "Обґрунтування геліоцентричної будови світу, винайдення телескопа та термометра."
-    },
-    {
-      "id": 13,
+      "id": 14,
       "question": "Чим відомий Архімед?",
       "type": "multiple_choice",
       "options": [
@@ -148,7 +156,7 @@
       "answer": "Запровадження поняття центра тяжіння та побудова теорії рівноваги важілів."
     },
     {
-      "id": 14,
+      "id": 15,
       "question": "Чим відомий Ернест Резерфорд?",
       "type": "multiple_choice",
       "options": [
@@ -160,7 +168,7 @@
       "answer": "Встановлення структури атома як системи, що складається з ядра та електронів, та вважається «батьком» ядерної фізики."
     },
     {
-      "id": 15,
+      "id": 16,
       "question": "Чим відомий Демокріт?",
       "type": "multiple_choice",
       "options": [
@@ -170,18 +178,6 @@
         "Він сформулював теорію електромагнітного поля."
       ],
       "answer": "Він висунув гіпотезу про атомарну будову речовини."
-    },
-    {
-      "id": 16,
-      "question": "Чим відомий Альберт Ейнштейн?",
-      "type": "multiple_choice",
-      "options": [
-        "Створив квантову теорію планетарного атома.",
-        "Сформулював теорію відносності, яка пов'язала простір і час з енергією та імпульсом матеріальних тіл.",
-        "Запровадив поняття центра тяжіння.",
-        "Відкрив явище радіоактивності."
-      ],
-      "answer": "Сформулював теорію відносності, яка пов'язала простір і час з енергією та імпульсом матеріальних тіл."
     }
   ]
 }
