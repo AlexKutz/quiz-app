@@ -35,13 +35,6 @@
       "image": "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=400&h=300&fit=crop"
     },
     {
-      "id": 5,
-      "question": "Який математичний символ зображено на картинці?",
-      "type": "text",
-      "answer": "пі",
-      "image": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&h=300&fit=crop"
-    },
-    {
       "id": 6,
       "question": "Визначте тип цього графіка",
       "type": "multiple_choice",

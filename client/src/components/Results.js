@@ -62,7 +62,7 @@ const Results = ({
               result.correct ? "correct" : "incorrect"
             }`}
           >
-            {result.givenAnswer || "Не відповідно"}
+            {result.userAnswer || "Не відповідно"}
           </MathJaxText>
         </div>
       );
@@ -75,7 +75,7 @@ const Results = ({
               result.correct ? "correct" : "incorrect"
             }`}
           >
-            {result.givenAnswer || "Не відповідно"}
+            {result.userAnswer || "Не відповідно"}
           </MathJaxText>
         </div>
       );
