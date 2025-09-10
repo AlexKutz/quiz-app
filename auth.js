@@ -9,16 +9,10 @@ export class AuthManager {
     this.db = db;
   }
 
-  // Хешування пароля (простий підхід)
+  // Хешування пароля
   hashPassword(password) {
-    // Використовуємо простий хеш для демонстрації
-    let hash = 0;
-    for (let i = 0; i < password.length; i++) {
-      const char = password.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return hash.toString(16);
+    const crypto = require("crypto");
+    return crypto.createHash("sha256").update(password).digest("hex");
   }
 
   // Перевірка пароля
@@ -60,7 +54,14 @@ export class AuthManager {
 
   // Авторизація користувача
   async login(fullName, password) {
-    const user = this.db.getUserByUsername(fullName);
+    // Спочатку шукаємо за username, потім за full_name
+    let user = this.db.getUserByUsername(fullName);
+
+    if (!user) {
+      // Якщо не знайшли за username, шукаємо за full_name
+      const allUsers = this.db.queries.getAllUsers?.all() || [];
+      user = allUsers.find((u) => u.full_name === fullName);
+    }
 
     if (!user) {
       throw new Error("Невірне ім'я або пароль");
@@ -108,8 +109,9 @@ export class AuthManager {
     }
 
     return {
-      userId: session.user_id,
+      id: session.user_id,
       username: session.username,
+      fullName: session.username, // Використовуємо username як fullName для сумісності
       role: session.role,
     };
   }

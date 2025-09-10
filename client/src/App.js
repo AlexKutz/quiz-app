@@ -9,6 +9,7 @@ import Header from "./components/Header";
 import Auth from "./components/Auth";
 import QuizSelection from "./components/QuizSelection";
 import WelcomeSection from "./components/WelcomeSection";
+import AdminPanel from "./components/AdminPanel";
 
 const AppContent = () => {
   const { user, isAuthenticated, authLoading, handleLogin, handleLogout } =
@@ -60,6 +61,18 @@ const AppContent = () => {
           </div>
           <Auth onLogin={handleLogin} />
         </div>
+      </div>
+    );
+  }
+
+  // Показуємо панель адміністратора, якщо користувач - адміністратор
+  if (user && user.role === "admin") {
+    return (
+      <div className="App">
+        <Header user={user} onLogout={handleLogout} showAdminPanel={true} />
+        <main className="main-content">
+          <AdminPanel />
+        </main>
       </div>
     );
   }

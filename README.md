@@ -51,6 +51,12 @@ bun run build
 bun start
 ```
 
+### 5. Create admin account
+
+```sh
+bun ./create-admin.js
+```
+
 ## Project structure
 
 - `index.js` - Server
@@ -78,6 +84,7 @@ bun start
 ### Рекомендовані файлообмінники
 
 #### 1. Google Drive
+
 1. Завантажте зображення на Google Drive
 2. Відкрийте файл → "Поделиться" → "Копировать ссылку"
 3. Замініть `file/d/` на `uc?export=view&id=` в URL

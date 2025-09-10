@@ -3,6 +3,7 @@ import { AuthManager } from "./auth.js";
 import { QuizService } from "./services/quizService.js";
 import { createAuthRoutes } from "./routes/auth.js";
 import { createQuizRoutes } from "./routes/quiz.js";
+import { createAdminRoutes } from "./routes/admin.js";
 import { serveStatic } from "./utils/static.js";
 import { sendJSON } from "./utils/response.js";
 import { SERVER_CONFIG, CORS_HEADERS } from "./config/server.js";
@@ -26,6 +27,7 @@ setInterval(() => {
 // Создание маршрутов
 const authRoutes = createAuthRoutes(auth);
 const quizRoutes = createQuizRoutes(db, quizService, auth);
+const adminRoutes = createAdminRoutes(db, auth);
 
 // Пассивная проверка сессий
 setInterval(() => {
@@ -98,6 +100,26 @@ async function handleRequest(request) {
     }
     if (method === "GET" && path === "/admin/check-sessions") {
       return quizRoutes.checkSessions();
+    }
+
+    // Admin routes
+    if (method === "GET" && path === "/admin/results") {
+      return adminRoutes.getAllResults(request);
+    }
+    if (method === "GET" && path.startsWith("/admin/results/quiz/")) {
+      return adminRoutes.getResultsByQuiz(request);
+    }
+    if (method === "GET" && path === "/admin/stats") {
+      return adminRoutes.getResultsStats(request);
+    }
+    if (method === "GET" && path.startsWith("/admin/result/")) {
+      return adminRoutes.getResultDetails(request);
+    }
+    if (method === "GET" && path === "/admin/quizzes") {
+      return adminRoutes.getQuizzesWithStats(request);
+    }
+    if (method === "GET" && path === "/admin/export") {
+      return adminRoutes.exportResults(request);
     }
 
     // 404 для неизвестных маршрутов

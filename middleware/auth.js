@@ -18,3 +18,20 @@ export function requireAuth(auth) {
     return null;
   };
 }
+
+export function requireAdmin(auth) {
+  return (request) => {
+    const user = authenticateUser(request, auth);
+    if (!user) {
+      return { error: "Необхідна авторизація", status: 401 };
+    }
+    if (user.role !== "admin") {
+      return {
+        error: "Доступ заборонено. Потрібні права адміністратора.",
+        status: 403,
+      };
+    }
+    request.user = user;
+    return null;
+  };
+}

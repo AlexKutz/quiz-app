@@ -11,6 +11,7 @@ const Header = ({
   timeExpired,
   isCompleted,
   backToQuizzes,
+  showAdminPanel = false,
 }) => {
   const formatTime = (seconds) => {
     if (seconds === null || seconds === undefined) return "";
@@ -49,6 +50,15 @@ const Header = ({
                 <span className="user-greeting">
                   Привіт, {user.fullName || user.username}!
                 </span>
+                {user.role === "admin" && !showAdminPanel && (
+                  <button
+                    className="admin-btn"
+                    onClick={() => window.location.reload()}
+                    title="Панель адміністратора"
+                  >
+                    Адмін
+                  </button>
+                )}
                 <button className="logout-btn" onClick={onLogout}>
                   Вийти
                 </button>

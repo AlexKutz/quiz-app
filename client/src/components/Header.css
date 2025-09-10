@@ -79,6 +79,22 @@
   fill: white;
 }
 
+.admin-btn {
+  background: rgba(255, 193, 7, 0.8);
+  color: #333;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background-color 0.3s;
+}
+
+.admin-btn:hover {
+  background: rgba(255, 193, 7, 1);
+}
+
 .logout-btn {
   background: rgba(220, 53, 69, 0.8);
   color: white;

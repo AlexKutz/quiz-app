@@ -204,6 +204,34 @@ class DatabaseManager {
         WHERE r.quiz_id = ?
         ORDER BY r.completed_at DESC
       `),
+      getAllResults: this.db.prepare(`
+        SELECT r.*, st.name, q.title as quiz_title
+        FROM results r
+        JOIN students st ON r.student_id = st.id
+        JOIN quizzes q ON r.quiz_id = q.id
+        ORDER BY r.completed_at DESC
+      `),
+      getResultsStats: this.db.prepare(`
+        SELECT 
+          q.id as quiz_id,
+          q.title as quiz_title,
+          COUNT(r.id) as total_attempts,
+          COUNT(DISTINCT r.student_id) as unique_students,
+          AVG(r.average_score) as avg_score,
+          MAX(r.average_score) as max_score,
+          MIN(r.average_score) as min_score
+        FROM quizzes q
+        LEFT JOIN results r ON q.id = r.quiz_id
+        GROUP BY q.id, q.title
+        ORDER BY q.title
+      `),
+      getResultById: this.db.prepare(`
+        SELECT r.*, st.name, q.title as quiz_title
+        FROM results r
+        JOIN students st ON r.student_id = st.id
+        JOIN quizzes q ON r.quiz_id = q.id
+        WHERE r.id = ?
+      `),
 
       // User authentication queries
       insertUser: this.db.prepare(`
@@ -215,6 +243,9 @@ class DatabaseManager {
       `),
       getUserById: this.db.prepare(`
         SELECT * FROM users WHERE id = ?
+      `),
+      getAllUsers: this.db.prepare(`
+        SELECT * FROM users
       `),
       updateLastLogin: this.db.prepare(`
         UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?
@@ -470,6 +501,14 @@ class DatabaseManager {
 
   getResultsByQuiz(quizId) {
     return this.queries.getResultsByQuiz.all(quizId);
+  }
+
+  getAllResults() {
+    return this.queries.getAllResults.all();
+  }
+
+  getResultsStats() {
+    return this.queries.getResultsStats.all();
   }
 
   // Методы для работы с пользователями
