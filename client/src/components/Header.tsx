@@ -1,36 +1,47 @@
 import React from "react";
 import "./Header.css";
 import { ArrowIcon } from "./Icons/ArrowIcon";
+import { User } from "../types";
 
-const Header = ({
+interface HeaderProps {
+  user: User | null;
+  onLogout: () => void;
+  quizTitle?: string | null;
+  timeRemaining?: number | null;
+  isCompleted?: boolean;
+  backToQuizzes?: () => void;
+  showAdminPanel?: boolean;
+}
+
+const Header: React.FC<HeaderProps> = ({
   user,
   onLogout,
-  name,
   quizTitle,
   timeRemaining,
-  timeExpired,
   isCompleted,
   backToQuizzes,
   showAdminPanel = false,
 }) => {
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number | null | undefined): string => {
     if (seconds === null || seconds === undefined) return "";
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${minutes}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const onBackToQuizzes = (e) => {
+  const onBackToQuizzes = (): void => {
     // TODO: Change function to react router
-    backToQuizzes();
+    if (backToQuizzes) {
+      backToQuizzes();
+    }
   };
 
   return (
     <header className="header">
       <div className="header-content">
-        {quizTitle && (
+        {quizTitle && backToQuizzes && (
           <ArrowIcon
-            onClick={() => onBackToQuizzes()}
+            onClick={onBackToQuizzes}
             className="header-icon"
           />
         )}
@@ -48,7 +59,7 @@ const Header = ({
             {user && (
               <>
                 <span className="user-greeting">
-                  Привіт, {user.fullName || user.username}!
+                  Привіт, {user.fullName || user.username || user.name}!
                 </span>
                 {user.role === "admin" && !showAdminPanel && (
                   <button

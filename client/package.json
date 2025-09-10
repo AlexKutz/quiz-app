@@ -12,6 +12,12 @@
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "typescript": "^5.9.2"
+  },
   "scripts": {
     "start": "PORT=3001 bunx react-scripts start",
     "build": "bunx react-scripts build",

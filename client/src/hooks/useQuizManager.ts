@@ -1,36 +1,64 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { Question, Quiz, QuizResult, QuizManagerType } from "../types";
 
-export const useQuizManager = () => {
+export const useQuizManager = (): QuizManagerType => {
   const { user, getAuthToken } = useAuth();
 
   // Стани для тестування
-  const [name, setName] = useState("");
-  const [questions, setQuestions] = useState([]);
-  const [results, setResults] = useState(null);
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [maxAttemptsReached, setMaxAttemptsReached] = useState(false);
-  const [attemptsLeft, setAttemptsLeft] = useState(null);
-  const [quizzes, setQuizzes] = useState([]);
-  const [selectedQuiz, setSelectedQuiz] = useState(null);
-  const [quizTitle, setQuizTitle] = useState("");
-  const [timeLimit, setTimeLimit] = useState(null);
-  const [timeRemaining, setTimeRemaining] = useState(null);
-  const [timeExpired, setTimeExpired] = useState(false);
-  const [currentAnswers, setCurrentAnswers] = useState({});
-  const [students, setStudents] = useState([]);
-  const [startTime, setStartTime] = useState(null);
-  const [savedAnswers, setSavedAnswers] = useState({});
-  const [confettiShown, setConfettiShown] = useState(false);
+  const [name, setName] = useState<string>("");
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [results, setResults] = useState<QuizResult | null>(null);
+  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [maxAttemptsReached, setMaxAttemptsReached] = useState<boolean>(false);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [selectedQuiz, setSelectedQuiz] = useState<string | null>(null);
+  const [quizTitle, setQuizTitle] = useState<string>("");
+  const [timeLimit, setTimeLimit] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [timeExpired, setTimeExpired] = useState<boolean>(false);
+  const [currentAnswers, setCurrentAnswers] = useState<{
+    [questionId: string]: number | string | { [leftIndex: string]: string };
+  }>({});
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [savedAnswers, setSavedAnswers] = useState<{
+    [questionId: string]: number | string | { [leftIndex: string]: string };
+  }>({});
+  const [confettiShown, setConfettiShown] = useState<boolean>(false);
 
   // Використовуємо useRef для збереження поточної функції handleSubmit
-  const handleSubmitRef = useRef(null);
+  const handleSubmitRef = useRef<
+    | ((answers: {
+        [questionId: string]: number | string | { [leftIndex: string]: string };
+      }) => Promise<void>)
+    | null
+  >(null);
+
+  // Функція для завантаження списку учнів з конкретного тесту
+  const loadStudentsFromQuiz = useCallback(
+    async (quizId: string): Promise<void> => {
+      try {
+        const token = getAuthToken();
+        const response = await fetch(`/quiz-info/${quizId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json();
+        console.log("Quiz info data:", data);
+      } catch (error) {
+        console.error("Ошибка загрузки информации о тесте:", error);
+      }
+    },
+    [getAuthToken]
+  );
 
   // Завантажуємо тести після авторизації
   useEffect(() => {
     if (user) {
-      const loadQuizzes = async () => {
+      const loadQuizzes = async (): Promise<void> => {
         try {
           const token = getAuthToken();
           const response = await fetch("/quizzes", {
@@ -55,12 +83,14 @@ export const useQuizManager = () => {
 
       loadQuizzes();
       // Автоматично встановлюємо ім'я користувача
-      setName(user.fullName || user.username);
+      const userName = user.fullName || user.username || user.name;
+      if (userName) {
+        setName(userName);
+      }
     }
-  }, [user, getAuthToken]);
+  }, [user, getAuthToken, loadStudentsFromQuiz]);
 
-  // Функція для завантаження списку учнів з конкретного тесту
-  const loadStudentsFromQuiz = async (quizId) => {
+  const loadQuizInfo = async (quizId: string): Promise<void> => {
     try {
       const token = getAuthToken();
       const response = await fetch(`/quiz-info/${quizId}`, {
@@ -69,27 +99,6 @@ export const useQuizManager = () => {
         },
       });
       const data = await response.json();
-      console.log("Quiz info data:", data);
-      if (data.students) {
-        setStudents(data.students);
-      }
-    } catch (error) {
-      console.error("Ошибка загрузки информации о тесте:", error);
-    }
-  };
-
-  const loadQuizInfo = async (quizId) => {
-    try {
-      const token = getAuthToken();
-      const response = await fetch(`/quiz-info/${quizId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await response.json();
-      if (data.students) {
-        setStudents(data.students);
-      }
       if (data.quizTitle) {
         setQuizTitle(data.quizTitle);
       }
@@ -100,10 +109,13 @@ export const useQuizManager = () => {
 
   // Функція для збереження відповіді на сервері
   const saveAnswerToServer = useCallback(
-    async (questionId, answer) => {
+    async (
+      questionId: string,
+      answer: number | string | { [leftIndex: string]: string }
+    ): Promise<void> => {
       if (!selectedQuiz || !user) return;
 
-      const userName = user.fullName || user.username;
+      const userName = user.fullName || user.username || user.name;
       if (!userName) return;
 
       try {
@@ -133,9 +145,9 @@ export const useQuizManager = () => {
     [selectedQuiz, user, getAuthToken]
   );
 
-  const loadQuestions = async (newAttempt = false) => {
+  const loadQuestions = async (newAttempt: boolean = false): Promise<void> => {
     // Використовуємо ім'я авторизованого користувача
-    const userName = user?.fullName || user?.username || name;
+    const userName = user?.fullName || user?.username || user?.name || name;
 
     if (!userName?.trim()) {
       alert("Помилка: не вдалося отримати ім'я користувача");
@@ -169,7 +181,6 @@ export const useQuizManager = () => {
         setTimeExpired(true);
         setIsCompleted(true);
         setQuizTitle(data.quizTitle || "");
-        setStudents(data.students || []);
         return;
       }
 
@@ -184,7 +195,6 @@ export const useQuizManager = () => {
         setConfettiShown(savedConfettiShown || false);
         setIsCompleted(true);
         setQuizTitle(data.quizTitle || "");
-        setStudents(data.students || []);
 
         if (data.maxAttemptsReached) {
           setMaxAttemptsReached(true);
@@ -204,7 +214,6 @@ export const useQuizManager = () => {
         setTimeLimit(data.timeLimit);
         setTimeRemaining(data.timeRemaining);
         setTimeExpired(false);
-        setStudents(data.students || []);
         setStartTime(data.startTime);
 
         // Відновлюємо збережені відповіді
@@ -226,30 +235,34 @@ export const useQuizManager = () => {
 
   // Функція для обробки зміни відповідей з автоматичним збереженням
   const handleAnswersChange = useCallback(
-    (newAnswers) => {
-      setCurrentAnswers(newAnswers);
+    (answers: {
+      [questionId: string]: number | string | { [leftIndex: string]: string };
+    }): void => {
+      setCurrentAnswers(answers);
 
       // Знаходимо змінені відповіді і зберігаємо їх
-      Object.keys(newAnswers).forEach((questionId) => {
-        const newAnswer = newAnswers[questionId];
-        const oldAnswer = savedAnswers[questionId];
+      Object.keys(answers).forEach((qId) => {
+        const newAnswer = answers[qId];
+        const oldAnswer = savedAnswers[qId];
 
         if (newAnswer !== oldAnswer) {
-          saveAnswerToServer(questionId, newAnswer);
+          saveAnswerToServer(qId, newAnswer);
         }
       });
 
-      setSavedAnswers(newAnswers);
+      setSavedAnswers(answers);
     },
     [savedAnswers, saveAnswerToServer]
   );
 
   const handleSubmit = useCallback(
-    async (answers) => {
+    async (answers: {
+      [questionId: string]: number | string | { [leftIndex: string]: string };
+    }): Promise<void> => {
       console.log("Starting submit with:", {
         selectedQuiz,
         answers,
-        userName: user?.fullName || user?.username || name,
+        userName: user?.fullName || user?.username || user?.name || name,
         startTime,
       });
 
@@ -259,7 +272,7 @@ export const useQuizManager = () => {
         return;
       }
 
-      const userName = user?.fullName || user?.username || name;
+      const userName = user?.fullName || user?.username || user?.name || name;
       if (!userName || userName.trim() === "") {
         console.error("No user name or empty user name:", userName);
         alert("Ошибка: имя пользователя не найдено или пустое");
@@ -358,10 +371,10 @@ export const useQuizManager = () => {
   }, [handleSubmit]);
 
   // Добавляем функцию для отметки конфетти как показанного
-  const markConfettiShown = useCallback(async () => {
+  const markConfettiShown = useCallback(async (): Promise<void> => {
     if (!selectedQuiz || !user) return;
 
-    const userName = user.fullName || user.username;
+    const userName = user.fullName || user.username || user.name;
     if (!userName) return;
 
     try {
@@ -386,12 +399,12 @@ export const useQuizManager = () => {
 
   // Таймер - виправлений useEffect
   useEffect(() => {
-    let interval = null;
+    let interval: NodeJS.Timeout | null = null;
 
-    if (timeRemaining > 0 && !isCompleted) {
+    if (timeRemaining && timeRemaining > 0 && !isCompleted) {
       interval = setInterval(() => {
         setTimeRemaining((time) => {
-          if (time <= 1) {
+          if (time && time <= 1) {
             // Використовуємо ref замість прямої залежності
             if (handleSubmitRef.current) {
               handleSubmitRef.current(currentAnswers);
@@ -400,7 +413,7 @@ export const useQuizManager = () => {
             setIsCompleted(true);
             return 0;
           }
-          return time - 1;
+          return time ? time - 1 : 0;
         });
       }, 1000);
     } else if (timeRemaining === 0) {
@@ -419,7 +432,7 @@ export const useQuizManager = () => {
     };
   }, [timeRemaining, isCompleted, currentAnswers]); // Видаляємо handleSubmit з залежностей
 
-  const resetTest = () => {
+  const resetTest = (): void => {
     if (maxAttemptsReached) {
       alert("Ви вичерпали всі спроби проходження тесту.");
       return;
@@ -437,7 +450,7 @@ export const useQuizManager = () => {
     loadQuestions(true);
   };
 
-  const resetToQuizSelection = () => {
+  const resetToQuizSelection = (): void => {
     setSelectedQuiz(null);
     setQuestions([]);
     setResults(null);
@@ -451,12 +464,11 @@ export const useQuizManager = () => {
     setTimeExpired(false);
     setCurrentAnswers({});
     setSavedAnswers({});
-    setStudents([]);
     setName("");
     setStartTime(null);
   };
 
-  const selectQuiz = (quizId) => {
+  const selectQuiz = (quizId: string): void => {
     setSelectedQuiz(quizId);
     loadQuizInfo(quizId);
   };
@@ -476,9 +488,6 @@ export const useQuizManager = () => {
     timeLimit,
     timeRemaining,
     timeExpired,
-    currentAnswers,
-    students,
-    startTime,
     savedAnswers,
     confettiShown,
 

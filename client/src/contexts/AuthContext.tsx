@@ -4,11 +4,13 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  ReactNode,
 } from "react";
+import { User, AuthContextType } from "../types";
 
-const AuthContext = createContext();
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
@@ -16,16 +18,20 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
+interface AuthProviderProps {
+  children: ReactNode;
+}
 
-  const getAuthToken = () => {
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  const getAuthToken = (): string | null => {
     return localStorage.getItem("authToken");
   };
 
-  const checkAuth = useCallback(async () => {
+  const checkAuth = useCallback(async (): Promise<void> => {
     const token = getAuthToken();
     if (!token) {
       setAuthLoading(false);
@@ -56,12 +62,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const handleLogin = (userData) => {
+  const handleLogin = (userData: User): void => {
     setUser(userData);
     setIsAuthenticated(true);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (): Promise<void> => {
     try {
       const token = getAuthToken();
       if (token) {
@@ -86,7 +92,7 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, [checkAuth]);
 
-  const value = {
+  const value: AuthContextType = {
     user,
     isAuthenticated,
     authLoading,

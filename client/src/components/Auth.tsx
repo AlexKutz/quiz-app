@@ -1,15 +1,48 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import "./Auth.css";
+import { User } from "../types";
 
-const Auth = ({ onLogin, onRegister }) => {
-  const [isLoginMode, setIsLoginMode] = useState(true);
-  const [formData, setFormData] = useState({
+interface AuthProps {
+  onLogin: (user: User) => void;
+}
+
+interface FormData {
+  fullName: string;
+  password: string;
+  confirmPassword: string;
+}
+
+const Auth: React.FC<AuthProps> = ({ onLogin }) => {
+  const [isLoginMode, setIsLoginMode] = useState<boolean>(true);
+  const [formData, setFormData] = useState<FormData>({
     fullName: "",
     password: "",
     confirmPassword: "",
   });
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const checkAuth = useCallback(
+    async (token: string): Promise<void> => {
+      try {
+        const response = await fetch("/auth/me", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          onLogin(result.user);
+        } else {
+          localStorage.removeItem("authToken");
+        }
+      } catch (error) {
+        localStorage.removeItem("authToken");
+      }
+    },
+    [onLogin]
+  );
 
   useEffect(() => {
     // Перевіряємо, чи користувач вже авторизований
@@ -17,28 +50,9 @@ const Auth = ({ onLogin, onRegister }) => {
     if (token) {
       checkAuth(token);
     }
-  }, []);
+  }, [checkAuth]);
 
-  const checkAuth = async (token) => {
-    try {
-      const response = await fetch("/auth/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        onLogin(result.user);
-      } else {
-        localStorage.removeItem("authToken");
-      }
-    } catch (error) {
-      localStorage.removeItem("authToken");
-    }
-  };
-
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -46,7 +60,9 @@ const Auth = ({ onLogin, onRegister }) => {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
@@ -86,7 +102,7 @@ const Auth = ({ onLogin, onRegister }) => {
           localStorage.setItem("authToken", result.token);
           localStorage.setItem(
             "userName",
-            result.user.fullName || result.user.username
+            result.user.fullName || result.user.username || result.user.name
           );
           onLogin(result.user);
         } else {
@@ -111,7 +127,9 @@ const Auth = ({ onLogin, onRegister }) => {
             localStorage.setItem("authToken", loginResult.token);
             localStorage.setItem(
               "userName",
-              loginResult.user.fullName || loginResult.user.username
+              loginResult.user.fullName ||
+                loginResult.user.username ||
+                loginResult.user.name
             );
             onLogin(loginResult.user);
           } else {
@@ -126,13 +144,13 @@ const Auth = ({ onLogin, onRegister }) => {
         setMessage(result.error);
       }
     } catch (error) {
-      setMessage("Помилка: " + error.message);
+      setMessage("Помилка: " + (error as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleMode = () => {
+  const toggleMode = (): void => {
     setIsLoginMode(!isLoginMode);
     setMessage("");
     setFormData({ fullName: "", password: "", confirmPassword: "" });
@@ -150,7 +168,7 @@ const Auth = ({ onLogin, onRegister }) => {
               type="text"
               id="fullName"
               name="fullName"
-              placeholder={isLoginMode ? null : "Наприклад: Іван Іванов"}
+              placeholder={isLoginMode ? undefined : "Наприклад: Іван Іванов"}
               value={formData.fullName}
               onChange={handleInputChange}
               required
